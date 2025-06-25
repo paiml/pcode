@@ -284,7 +284,7 @@ pcode now includes **PMAT (Pragmatic Metrics for Agile Teams)** integration for 
 ### PMAT Commands
 
 ```bash
-# Analyze code complexity
+# Analyze code complexity (Python & Rust)
 pcode> /pmat complexity src/
 # Shows cyclomatic complexity for all functions
 # Flags functions with complexity > 20
@@ -293,6 +293,16 @@ pcode> /pmat complexity src/
 pcode> /pmat satd .
 # Finds TODO, FIXME, HACK comments
 # Identifies workarounds and temporary code
+
+# Estimate test coverage
+pcode> /pmat coverage tests/
+# Estimates coverage based on test presence
+# Shows uncovered lines and low coverage files
+
+# Analyze test dependencies (TDG)
+pcode> /pmat tdg tests/
+# Calculates Test Dependency Graph score
+# Identifies tests with dependencies or shared state
 ```
 
 ### Example Output
@@ -331,6 +341,8 @@ We've successfully implemented the first phase of code execution:
 - [x] PMAT integration with sandboxed Python execution
 - [x] Complexity analysis for Python and Rust
 - [x] Technical debt detection
+- [x] Test coverage estimation
+- [x] Test dependency graph (TDG) analysis
 - [x] Secure code execution framework
 - [x] Bash command execution tool
 - [x] Development CLI tool integration (ripgrep, cargo, git, etc.)
@@ -339,11 +351,12 @@ We've successfully implemented the first phase of code execution:
 ### 🎯 Next Milestone: Extended Code Execution
 
 #### Phase 2: Extended PMAT Features
-- [ ] Add test coverage analysis
-- [ ] Implement test dependency graph (TDG) analysis
+- [x] Add test coverage analysis
+- [x] Implement test dependency graph (TDG) analysis
 - [ ] Support for JavaScript/TypeScript analysis
 - [x] Support for Rust code analysis
 - [ ] Integration with AI for automatic refactoring
+- [ ] Real coverage integration with cargo-tarpaulin
 
 #### Phase 3: General Code Execution
 - [ ] Implement sandboxed code execution for multiple languages:
