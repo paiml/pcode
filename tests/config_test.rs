@@ -15,7 +15,6 @@ fn test_config_without_api_key() {
     // Use a custom isolated test that doesn't read from actual environment
     let config = Config {
         ai_studio_api_key: None,
-        ai_studio_base_url: "https://generativelanguage.googleapis.com/v1beta".to_string(),
     };
     assert!(!config.has_api_key());
     assert_eq!(config.ai_studio_api_key, None);
