@@ -237,7 +237,7 @@ impl InteractiveChat {
                     let parts: Vec<&str> = params_str.split_whitespace().collect();
                     if parts.len() < 2 {
                         println!("❌ Usage: /pmat <command> <path>");
-                        println!("   Commands: complexity, satd, coverage");
+                        println!("   Commands: complexity, satd, coverage, tdg");
                         return Ok(());
                     }
                     json!({ "command": parts[0], "path": parts[1] })
@@ -305,7 +305,7 @@ impl InteractiveChat {
         println!("  /process <command>              - Execute a command");
         println!("  /llm <prompt>                   - Query the LLM (requires API key)");
         println!("  /token_estimate <text>          - Estimate token count");
-        println!("  /pmat <command> <path>          - Run PMAT analysis (complexity, satd, coverage)");
+        println!("  /pmat <command> <path>          - Run PMAT analysis (complexity, satd, coverage, tdg)");
         println!("  /bash <command>                 - Execute bash commands");
         println!("  /dev_cli <tool> [args...]       - Run dev tools (rg, cargo, git, etc.)");
         println!();

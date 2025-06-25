@@ -44,6 +44,14 @@ pub struct SatdResult {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestDependency {
+    pub test_name: String,
+    pub file: String,
+    pub dependencies: Vec<String>,
+    pub shared_state: Vec<String>,
+}
+
 pub struct PmatTool {
     workspace: PathBuf,
     python_path: Option<PathBuf>,
@@ -677,6 +685,265 @@ if __name__ == "__main__":
             uncovered_lines,
         })
     }
+    
+    async fn analyze_test_dependencies(&self, path: &str) -> Result<Vec<TestDependency>, ToolError> {
+        // For Rust projects
+        if path.ends_with(".rs") || PathBuf::from(path).is_dir() {
+            return self.analyze_rust_test_dependencies(path).await;
+        }
+        
+        // Python TDG analysis script
+        let script = r#"
+import ast
+import os
+import sys
+import json
+
+class TestDependencyAnalyzer(ast.NodeVisitor):
+    def __init__(self, filename):
+        self.filename = filename
+        self.tests = []
+        self.current_test = None
+        self.current_dependencies = set()
+        self.current_shared_state = set()
+        self.global_vars = set()
+        self.class_vars = set()
+        
+    def visit_ClassDef(self, node):
+        # Track test classes
+        if any(base.id == 'TestCase' if isinstance(base, ast.Name) else False 
+               for base in node.bases):
+            # Visit class body to find class variables
+            for item in node.body:
+                if isinstance(item, ast.Assign):
+                    for target in item.targets:
+                        if isinstance(target, ast.Name):
+                            self.class_vars.add(target.id)
+        self.generic_visit(node)
+    
+    def visit_FunctionDef(self, node):
+        if node.name.startswith('test_'):
+            self.current_test = node.name
+            self.current_dependencies = set()
+            self.current_shared_state = set()
+            
+            # Visit function body
+            self.generic_visit(node)
+            
+            self.tests.append({
+                "test_name": self.current_test,
+                "file": self.filename,
+                "dependencies": list(self.current_dependencies),
+                "shared_state": list(self.current_shared_state)
+            })
+            
+            self.current_test = None
+    
+    def visit_Attribute(self, node):
+        if self.current_test:
+            # Check for self.* references (shared state)
+            if isinstance(node.value, ast.Name) and node.value.id == 'self':
+                self.current_shared_state.add(f"self.{node.attr}")
+        self.generic_visit(node)
+    
+    def visit_Call(self, node):
+        if self.current_test:
+            # Check for calls to other test methods
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                if func_name.startswith('test_') and func_name != self.current_test:
+                    self.current_dependencies.add(func_name)
+            elif isinstance(node.func, ast.Attribute):
+                # Check for self.test_* calls
+                if (isinstance(node.func.value, ast.Name) and 
+                    node.func.value.id == 'self' and 
+                    node.func.attr.startswith('test_')):
+                    self.current_dependencies.add(node.func.attr)
+        self.generic_visit(node)
+    
+    def visit_Name(self, node):
+        if self.current_test:
+            # Check for use of global variables in tests
+            if isinstance(node.ctx, ast.Load) and node.id in self.global_vars:
+                self.current_shared_state.add(f"global:{node.id}")
+            elif isinstance(node.ctx, ast.Load) and node.id in self.class_vars:
+                self.current_shared_state.add(f"class:{node.id}")
+        self.generic_visit(node)
+    
+    def visit_Global(self, node):
+        for name in node.names:
+            self.global_vars.add(name)
+        self.generic_visit(node)
+
+def analyze_file(filepath):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+            tree = ast.parse(content)
+            
+        analyzer = TestDependencyAnalyzer(filepath)
+        analyzer.visit(tree)
+        
+        return analyzer.tests
+    except Exception as e:
+        return []
+
+def analyze_path(path):
+    all_tests = []
+    
+    if os.path.isfile(path) and path.endswith('.py'):
+        all_tests.extend(analyze_file(path))
+    elif os.path.isdir(path):
+        for root, _, files in os.walk(path):
+            for file in files:
+                if file.endswith('.py') and 'test' in file.lower():
+                    filepath = os.path.join(root, file)
+                    all_tests.extend(analyze_file(filepath))
+    
+    return all_tests
+
+if __name__ == "__main__":
+    path = sys.argv[1] if len(sys.argv) > 1 else "."
+    results = analyze_path(path)
+    print(json.dumps(results))
+"#;
+
+        let output = self.execute_python(script, vec![path.to_string()]).await?;
+        
+        serde_json::from_str(&output)
+            .map_err(|e| ToolError::Execution(format!("Failed to parse TDG results: {}", e)))
+    }
+    
+    async fn analyze_rust_test_dependencies(&self, path: &str) -> Result<Vec<TestDependency>, ToolError> {
+        let mut results = Vec::new();
+        
+        let target_path = PathBuf::from(path);
+        if target_path.is_file() {
+            let deps = self.analyze_rust_file_test_deps(&target_path).await?;
+            results.extend(deps);
+        } else if target_path.is_dir() {
+            // Walk directory for test files
+            for entry in walkdir::WalkDir::new(&target_path)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    let path = e.path();
+                    path.extension().map_or(false, |ext| ext == "rs") &&
+                    (path.to_string_lossy().contains("test") || 
+                     path.components().any(|c| c.as_os_str() == "tests"))
+                })
+                .filter(|e| !e.path().to_string_lossy().contains("target"))
+            {
+                if entry.file_type().is_file() {
+                    let deps = self.analyze_rust_file_test_deps(entry.path()).await?;
+                    results.extend(deps);
+                }
+            }
+        }
+        
+        Ok(results)
+    }
+    
+    async fn analyze_rust_file_test_deps(&self, path: &Path) -> Result<Vec<TestDependency>, ToolError> {
+        let content = tokio::fs::read_to_string(path).await
+            .map_err(|e| ToolError::Execution(format!("Failed to read file: {}", e)))?;
+        
+        let mut dependencies = Vec::new();
+        let file_name = path.to_string_lossy().to_string();
+        
+        // Simple heuristic-based analysis for Rust tests
+        let lines: Vec<&str> = content.lines().collect();
+        let mut current_test: Option<&str> = None;
+        let mut current_deps = Vec::new();
+        let mut current_shared = Vec::new();
+        
+        // Track static/global state
+        let mut static_vars = Vec::new();
+        for line in &lines {
+            if line.trim().starts_with("static ") || line.trim().starts_with("static mut ") {
+                if let Some(name) = line.split_whitespace().nth(2) {
+                    static_vars.push(name.trim_end_matches(':'));
+                }
+            }
+        }
+        
+        for (i, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            
+            // Detect test functions
+            if trimmed.starts_with("#[test]") || trimmed.starts_with("#[tokio::test]") {
+                // Look for the function name on the next line
+                if i + 1 < lines.len() {
+                    let next_line = lines[i + 1].trim();
+                    if let Some(fn_start) = next_line.find("fn ") {
+                        let fn_name = next_line[fn_start + 3..]
+                            .split(|c: char| !c.is_alphanumeric() && c != '_')
+                            .next()
+                            .unwrap_or("");
+                        
+                        if !fn_name.is_empty() {
+                            // Save previous test if any
+                            if let Some(test_name) = current_test {
+                                dependencies.push(TestDependency {
+                                    test_name: test_name.to_string(),
+                                    file: file_name.clone(),
+                                    dependencies: current_deps.clone(),
+                                    shared_state: current_shared.clone(),
+                                });
+                            }
+                            
+                            current_test = Some(fn_name);
+                            current_deps.clear();
+                            current_shared.clear();
+                        }
+                    }
+                }
+            }
+            
+            // Analyze test body for dependencies
+            if current_test.is_some() {
+                // Check for calls to other test functions
+                if trimmed.contains("test_") && !trimmed.starts_with("//") {
+                    // Extract potential test function calls
+                    for word in trimmed.split(|c: char| !c.is_alphanumeric() && c != '_') {
+                        if word.starts_with("test_") && word != current_test.unwrap() {
+                            current_deps.push(word.to_string());
+                        }
+                    }
+                }
+                
+                // Check for use of static/global state
+                for static_var in &static_vars {
+                    if trimmed.contains(static_var) && !trimmed.starts_with("//") {
+                        current_shared.push(format!("static:{}", static_var));
+                    }
+                }
+                
+                // Check for file I/O (potential shared state)
+                if (trimmed.contains("File::") || trimmed.contains("fs::") || 
+                    trimmed.contains("std::fs::")) && !trimmed.starts_with("//") {
+                    current_shared.push("file_io".to_string());
+                }
+                
+                // Check for environment variables (shared state)
+                if trimmed.contains("env::") && !trimmed.starts_with("//") {
+                    current_shared.push("env_vars".to_string());
+                }
+            }
+        }
+        
+        // Save last test
+        if let Some(test_name) = current_test {
+            dependencies.push(TestDependency {
+                test_name: test_name.to_string(),
+                file: file_name,
+                dependencies: current_deps,
+                shared_state: current_shared,
+            });
+        }
+        
+        Ok(dependencies)
+    }
 }
 
 #[async_trait::async_trait]
@@ -780,8 +1047,38 @@ impl Tool for PmatTool {
                 }))
             }
             
+            "tdg" => {
+                let results = self.analyze_test_dependencies(&params.path).await?;
+                
+                // Calculate summary statistics
+                let total_tests = results.len();
+                let independent_tests = results.iter().filter(|r| r.dependencies.is_empty()).count();
+                let max_dependencies = results.iter().map(|r| r.dependencies.len()).max().unwrap_or(0);
+                
+                let tdg_score = if total_tests == 0 {
+                    0.0
+                } else {
+                    // TDG score: ratio of dependent tests to total tests
+                    // Lower is better (0.0 = all independent, 1.0 = all dependent)
+                    (total_tests - independent_tests) as f64 / total_tests as f64
+                };
+
+                Ok(serde_json::json!({
+                    "command": "tdg",
+                    "path": params.path,
+                    "summary": {
+                        "total_tests": total_tests,
+                        "independent_tests": independent_tests,
+                        "dependent_tests": total_tests - independent_tests,
+                        "max_dependencies": max_dependencies,
+                        "tdg_score": tdg_score
+                    },
+                    "details": results
+                }))
+            }
+            
             _ => Err(ToolError::InvalidParams(
-                format!("Unknown command: {}. Use: complexity, satd, coverage", params.command)
+                format!("Unknown command: {}. Use: complexity, satd, coverage, tdg", params.command)
             ))
         }
     }
@@ -835,5 +1132,24 @@ mod tests {
         assert_eq!(value["command"], "coverage");
         assert!(value["summary"]["total_files"].as_u64().unwrap() > 0);
         assert!(value["details"].is_array());
+    }
+    
+    #[tokio::test]
+    async fn test_pmat_tdg() {
+        let tool = PmatTool::new();
+        
+        // Test TDG on test files
+        let params = serde_json::json!({
+            "command": "tdg",
+            "path": "src/tools/mod.rs"
+        });
+        
+        let result = tool.execute(params).await;
+        assert!(result.is_ok());
+        
+        let value = result.unwrap();
+        assert_eq!(value["command"], "tdg");
+        assert!(value["summary"]["tdg_score"].as_f64().unwrap() >= 0.0);
+        assert!(value["summary"]["tdg_score"].as_f64().unwrap() <= 1.0);
     }
 }
