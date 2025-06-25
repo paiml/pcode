@@ -8,6 +8,7 @@ use pcode::{
     tools::{
         file::{FileReadTool, FileWriteTool},
         llm::{LlmTool, TokenEstimateTool},
+        pmat::PmatTool,
         process::ProcessTool,
         ToolRegistry,
     },
@@ -96,6 +97,7 @@ async fn async_main(args: Args) -> Result<()> {
     registry.register(Box::new(ProcessTool));
     registry.register(Box::new(LlmTool::new()));
     registry.register(Box::new(TokenEstimateTool));
+    registry.register(Box::new(PmatTool::new()));
 
     info!("Registered {} tools", registry.list_tools().len());
 

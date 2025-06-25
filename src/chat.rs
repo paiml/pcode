@@ -233,6 +233,15 @@ impl InteractiveChat {
                 }
                 "llm" => json!({ "prompt": params_str }),
                 "token_estimate" => json!({ "text": params_str }),
+                "pmat" => {
+                    let parts: Vec<&str> = params_str.split_whitespace().collect();
+                    if parts.len() < 2 {
+                        println!("❌ Usage: /pmat <command> <path>");
+                        println!("   Commands: complexity, satd");
+                        return Ok(());
+                    }
+                    json!({ "command": parts[0], "path": parts[1] })
+                }
                 _ => {
                     println!("❌ Unknown parameter format for tool: {}", tool_name);
                     return Ok(());
@@ -281,6 +290,7 @@ impl InteractiveChat {
         println!("  /process <command>              - Execute a command");
         println!("  /llm <prompt>                   - Query the LLM (requires API key)");
         println!("  /token_estimate <text>          - Estimate token count");
+        println!("  /pmat <command> <path>          - Run PMAT analysis (complexity, satd)");
         println!();
         println!("💡 Tips:");
         println!("  - Use Tab for command completion");

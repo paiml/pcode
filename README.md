@@ -126,6 +126,8 @@ pcode> /file_write test.txt Hello    # Write to a file
 pcode> /process ls -la               # Execute a command
 pcode> /llm Explain this code        # Query the LLM (requires API key)
 pcode> /token_estimate text          # Estimate token count
+pcode> /pmat complexity src/         # Analyze code complexity
+pcode> /pmat satd .                  # Find technical debt
 pcode> clear                         # Clear screen
 pcode> exit                          # Exit pcode
 ```
@@ -139,6 +141,7 @@ pcode> exit                          # Exit pcode
 | `process` | Execute system command | `command`, `args?`, `cwd?`, `timeout_ms?` |
 | `llm` | Interact with language model | `prompt`, `max_tokens?`, `temperature?` |
 | `token_estimate` | Estimate token count | `text`, `fast?` |
+| `pmat` | Run code quality analysis | `command`, `path`, `language?` |
 
 ### Example: Dogfooding
 
@@ -269,21 +272,72 @@ Contributions are welcome! Please ensure:
 - [Code Quality Report](QUALITY.md) - Coverage and complexity metrics
 - [CLAUDE.md](CLAUDE.md) - AI assistant integration guide
 
+## 🎨 Code Analysis with PMAT
+
+pcode now includes **PMAT (Pragmatic Metrics for Agile Teams)** integration for code quality analysis! This is the first step towards full code execution capabilities.
+
+### PMAT Commands
+
+```bash
+# Analyze code complexity
+pcode> /pmat complexity src/
+# Shows cyclomatic complexity for all functions
+# Flags functions with complexity > 20
+
+# Detect technical debt (SATD)
+pcode> /pmat satd .
+# Finds TODO, FIXME, HACK comments
+# Identifies workarounds and temporary code
+```
+
+### Example Output
+
+```bash
+pcode> /pmat complexity test.py
+🔧 Executing PMAT analysis...
+✅ Success:
+{
+  "summary": {
+    "max_complexity": 9,
+    "average_complexity": 5.0,
+    "total_functions": 4,
+    "violations": 0
+  },
+  "details": [
+    {"function": "simple_func", "complexity": 1},
+    {"function": "complex_func", "complexity": 9}
+  ]
+}
+```
+
+### Security
+
+PMAT runs Python code in a sandboxed environment with:
+- No network access
+- Limited file system access (read-only to source)
+- 30-second timeout
+- Memory limits
+
 ## 🏗️ Roadmap
 
-### 🎯 Next Milestone: Code Execution & PMAT Integration
+### ✅ Completed: PMAT Integration (Phase 1)
 
-The current limitation is that pcode cannot actually execute code, which significantly limits its usefulness as an AI code agent. The next critical milestone is to add code execution capabilities.
+We've successfully implemented the first phase of code execution through PMAT integration:
+- [x] Sandboxed Python execution
+- [x] Complexity analysis 
+- [x] Technical debt detection
+- [x] Secure code execution framework
 
-#### Phase 1: PMAT Integration via MCP (Priority 1)
-- [ ] Implement MCP tool for PMAT (Pragmatic Metrics for Agile Teams) execution
-- [ ] Add sandboxed Python code execution for analysis scripts
-- [ ] Integrate complexity analysis (cyclomatic complexity ≤ 20)
-- [ ] Add test coverage analysis capabilities
-- [ ] Implement technical debt detection (SATD)
-- [ ] Add test dependency graph (TDG) analysis
+### 🎯 Next Milestone: Extended Code Execution
 
-#### Phase 2: General Code Execution (Priority 2)
+#### Phase 2: Extended PMAT Features
+- [ ] Add test coverage analysis
+- [ ] Implement test dependency graph (TDG) analysis
+- [ ] Support for JavaScript/TypeScript analysis
+- [ ] Support for Rust code analysis
+- [ ] Integration with AI for automatic refactoring
+
+#### Phase 3: General Code Execution
 - [ ] Implement sandboxed code execution for multiple languages:
   - [ ] Python (via embedded interpreter or subprocess)
   - [ ] JavaScript/TypeScript (via Deno)

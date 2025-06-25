@@ -1,5 +1,6 @@
 pub mod file;
 pub mod llm;
+pub mod pmat;
 pub mod process;
 
 use async_trait::async_trait;
