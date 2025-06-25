@@ -1,4 +1,5 @@
 pub mod bash;
+pub mod coverage;
 pub mod dev_cli;
 pub mod file;
 pub mod fix;

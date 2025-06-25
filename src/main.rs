@@ -8,6 +8,7 @@ use pcode::{
     security::{SecurityContext, SecurityPolicy},
     tools::{
         bash::BashTool,
+        coverage::CoverageTool,
         dev_cli::DevCliTool,
         file::{FileReadTool, FileWriteTool},
         fix::FixTool,
@@ -265,6 +266,7 @@ async fn initialize_tool_registry() -> Result<ToolRegistry> {
     registry.register(Box::new(BashTool::new()));
     registry.register(Box::new(DevCliTool::new()));
     registry.register(Box::new(FixTool::new()));
+    registry.register(Box::new(CoverageTool::new()));
 
     debug!("Registered {} built-in tools", registry.list_tools().len());
 

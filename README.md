@@ -150,6 +150,7 @@ pcode> exit                          # Exit pcode
 | `pmat` | Run code quality analysis | `command`, `path`, `language?` |
 | `bash` | Execute bash commands | `command` |
 | `dev_cli` | Run dev tools (rg, cargo, git) | `tool`, `args` |
+| `coverage` | Real code coverage with tarpaulin | `path?`, `format?`, `exclude_files?` |
 
 ### Example: Dogfooding
 
@@ -357,7 +358,7 @@ We've successfully implemented the first phase of code execution:
 #### Phase 2: Extended PMAT Features
 - [x] Add test coverage analysis
 - [x] Implement test dependency graph (TDG) analysis
-- [ ] Support for JavaScript/TypeScript analysis
+- [x] Support for JavaScript/TypeScript analysis
 - [x] Support for Rust code analysis
 - [ ] Integration with AI for automatic refactoring
 - [ ] Real coverage integration with cargo-tarpaulin
