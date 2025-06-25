@@ -37,8 +37,9 @@ impl LlmTool {
         let client = reqwest::Client::new();
 
         // Google AI Studio API endpoint for Gemini
+        // Using the latest Gemini 2.0 Flash model for best performance
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={}",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
             api_key
         );
 

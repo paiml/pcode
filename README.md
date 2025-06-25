@@ -25,7 +25,7 @@ Production-grade AI code agent with extreme performance and security requirement
 ### Tools & Capabilities
 - **File Operations**: Read/write with path restrictions
 - **Process Execution**: Sandboxed command execution with timeout
-- **LLM Integration**: Google AI Studio support (API key required)
+- **LLM Integration**: Google AI Studio support with Gemini 2.0 Flash (API key required)
 - **Token Estimation**: Fast and accurate token counting
 - **MCP Protocol**: Extensible tool system via Cap'n Proto
 
