@@ -18,6 +18,7 @@ async fn test_full_integration() {
         allow_network: false,
         allow_process_spawn: false,
         max_memory_mb: 256,
+        network_policy: None,
     };
 
     // Security context might fail in tests

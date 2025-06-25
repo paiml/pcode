@@ -8,6 +8,7 @@ fn test_security_policy_custom() {
         allow_network: true,
         allow_process_spawn: false,
         max_memory_mb: 1024,
+        network_policy: None,
     };
 
     assert_eq!(policy.allowed_paths.len(), 1);
@@ -32,6 +33,7 @@ fn test_macos_sandbox() {
         allow_network: false,
         allow_process_spawn: true,
         max_memory_mb: 512,
+        network_policy: None,
     };
 
     // Should not fail
@@ -48,6 +50,7 @@ fn test_windows_sandbox() {
         allow_network: true,
         allow_process_spawn: false,
         max_memory_mb: 512,
+        network_policy: None,
     };
 
     // Should not fail

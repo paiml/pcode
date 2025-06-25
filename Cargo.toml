@@ -32,7 +32,8 @@ capnp = "0.20"
 # phf removed - using compile-time generated lookup table instead
 bytes = "1.7"
 memmap2 = "0.9"
-nix = { version = "0.29", features = ["process", "fs"] }
+nix = { version = "0.29", features = ["process", "fs", "resource"] }
+libc = "0.2"
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 rustyline = "14.0"

@@ -8,6 +8,8 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+pub mod sandbox;
+
 #[derive(Debug, thiserror::Error)]
 pub enum SecurityError {
     #[error("Failed to initialize sandbox: {0}")]
@@ -18,6 +20,12 @@ pub enum SecurityError {
 
     #[error("Unsupported platform")]
     UnsupportedPlatform,
+    
+    #[error("Invalid manifest: {0}")]
+    InvalidManifest(String),
+    
+    #[error("Network access denied: {0}")]
+    NetworkAccessDenied(String),
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +34,22 @@ pub struct SecurityPolicy {
     pub allow_network: bool,
     pub allow_process_spawn: bool,
     pub max_memory_mb: usize,
+    pub network_policy: Option<NetworkPolicy>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkPolicy {
+    pub allowed_domains: Vec<String>,
+    pub allowed_ports: Vec<u16>,
+    pub allowed_protocols: Vec<Protocol>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Protocol {
+    Tcp,
+    Udp,
+    Http,
+    Https,
 }
 
 impl Default for SecurityPolicy {
@@ -34,7 +58,8 @@ impl Default for SecurityPolicy {
             allowed_paths: vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))],
             allow_network: false,
             allow_process_spawn: false,
-            max_memory_mb: 512,
+            max_memory_mb: 2048, // 2GB default
+            network_policy: None,
         }
     }
 }
@@ -97,7 +122,7 @@ mod tests {
         let policy = SecurityPolicy::default();
         assert!(!policy.allow_network);
         assert!(!policy.allow_process_spawn);
-        assert_eq!(policy.max_memory_mb, 512);
+        assert_eq!(policy.max_memory_mb, 2048);
     }
 
     #[test]

@@ -204,6 +204,7 @@ async fn async_main(args: Args) -> Result<()> {
             allow_network: false,
             allow_process_spawn: true,
             max_memory_mb: args.max_memory,
+            network_policy: None,
         };
 
         match SecurityContext::new(policy) {

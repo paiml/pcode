@@ -1197,6 +1197,7 @@ dependencies = [
  "capnpc",
  "clap",
  "criterion",
+ "libc",
  "memmap2",
  "nix 0.29.0",
  "proptest",

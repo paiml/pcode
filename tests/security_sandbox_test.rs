@@ -9,6 +9,7 @@ fn test_security_policy_builder() {
         allow_network: false,
         allow_process_spawn: true,
         max_memory_mb: 1024,
+        network_policy: None,
     };
 
     assert_eq!(policy.allowed_paths.len(), 2);
@@ -24,6 +25,7 @@ fn test_security_context_with_custom_policy() {
         allow_network: true,
         allow_process_spawn: false,
         max_memory_mb: 256,
+        network_policy: None,
     };
 
     let context = SecurityContext::new(policy);
@@ -40,6 +42,7 @@ fn test_path_access_edge_cases() {
         allow_network: false,
         allow_process_spawn: false,
         max_memory_mb: 512,
+        network_policy: None,
     };
 
     let context = SecurityContext::new(policy);
@@ -78,6 +81,7 @@ fn test_landlock_security_context() {
         allow_network: false,
         allow_process_spawn: false,
         max_memory_mb: 512,
+        network_policy: None,
     };
 
     // This might fail on systems without Landlock support
