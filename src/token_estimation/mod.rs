@@ -39,20 +39,22 @@ impl BpeRuleset {
             ],
         }
     }
-    
+
     fn tokenize_at(&self, bytes: &[u8]) -> (usize, usize) {
         // Simple BPE tokenization
         if bytes.is_empty() {
             return (0, 0);
         }
-        
+
         // Try to match common merges
         for (left, right, _) in &self.merges {
-            if bytes.starts_with(left) && (right.is_empty() || bytes[left.len()..].starts_with(right)) {
+            if bytes.starts_with(left)
+                && (right.is_empty() || bytes[left.len()..].starts_with(right))
+            {
                 return (1, left.len() + right.len());
             }
         }
-        
+
         // Default: one token per 4 characters on average
         let char_count = std::cmp::min(4, bytes.len());
         (1, char_count)
@@ -79,39 +81,40 @@ impl CompactTokenCounter {
             bpe_rules: BpeRuleset::minimal(),
         }
     }
-    
+
     pub fn instance() -> &'static Self {
         TOKENIZER.get_or_init(Self::new)
     }
-    
+
     pub fn count_tokens(&self, text: &str) -> usize {
         // Skip whitespace-only strings
         if text.trim().is_empty() {
             return 0;
         }
-        
+
         let mut tokens = 0;
         let bytes = text.as_bytes();
         let mut i = 0;
-        
+
         while i < bytes.len() {
             // Skip whitespace
             if bytes[i].is_ascii_whitespace() {
                 i += 1;
                 continue;
             }
-            
+
             // Try to match longest pattern in lookup table
             let mut matched = false;
-            
+
             for len in (1..=8).rev() {
                 if i + len <= bytes.len() {
                     // Simple hash function (same as in build.rs)
-                    let hash = bytes[i..i+len].iter().fold(0u64, |acc, &b| {
-                        acc.wrapping_mul(31).wrapping_add(b as u64)
-                    }) as usize;
+                    let hash = bytes[i..i + len]
+                        .iter()
+                        .fold(0u64, |acc, &b| acc.wrapping_mul(31).wrapping_add(b as u64))
+                        as usize;
                     let index = hash & 0x1FFFF; // Mask to 17 bits
-                    
+
                     if self.pattern_table[index] != 0 {
                         tokens += self.pattern_table[index] as usize;
                         i += len;
@@ -120,7 +123,7 @@ impl CompactTokenCounter {
                     }
                 }
             }
-            
+
             if !matched {
                 // Fallback to simple BPE
                 let (token_count, bytes_consumed) = self.bpe_rules.tokenize_at(&bytes[i..]);
@@ -128,7 +131,7 @@ impl CompactTokenCounter {
                 i += bytes_consumed;
             }
         }
-        
+
         debug!(
             "Estimated {} tokens for text of length {}",
             tokens,
@@ -136,11 +139,11 @@ impl CompactTokenCounter {
         );
         tokens
     }
-    
+
     pub fn estimate_tokens(&self, text: &str) -> usize {
         self.count_tokens(text)
     }
-    
+
     pub fn estimate_tokens_fast(&self, text: &str) -> usize {
         // Fast approximation based on character count
         // Average of 4 characters per token
@@ -179,11 +182,11 @@ mod tests {
         assert!((fast as f32 / accurate as f32) > 0.5);
         assert!((fast as f32 / accurate as f32) < 2.0);
     }
-    
+
     #[test]
     fn test_common_tokens() {
         let tokenizer = CompactTokenCounter::new();
-        
+
         // These should be recognized by our lookup table
         assert_eq!(tokenizer.estimate_tokens("fn"), 1);
         assert_eq!(tokenizer.estimate_tokens("let"), 1);

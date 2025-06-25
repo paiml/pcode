@@ -16,7 +16,7 @@ async function runPcode(input: string, withApiKey = false): Promise<TestResult> 
   if (!withApiKey) {
     delete env.AI_STUDIO_API_KEY;
   }
-  
+
   const cmd = new Deno.Command("./target/release/pcode", {
     args: ["--no-sandbox"],
     stdin: "piped",
@@ -39,17 +39,17 @@ async function runPcode(input: string, withApiKey = false): Promise<TestResult> 
   };
 }
 
-function extractChatResponse(output: string, query: string): string {
+function extractChatResponse(output: string, _query: string): string {
   const lines = output.split("\n");
-  
+
   // Find where the welcome message ends
-  const welcomeEnd = lines.findIndex(line => line.includes("Type 'help' for available commands"));
+  const welcomeEnd = lines.findIndex((line) => line.includes("Type 'help' for available commands"));
   if (welcomeEnd === -1) return "Welcome message not found";
-  
+
   // Extract all content after the welcome message and before "Goodbye"
   const responseLines: string[] = [];
   let foundContent = false;
-  
+
   for (let i = welcomeEnd + 2; i < lines.length; i++) {
     const line = lines[i];
     if (line.includes("Goodbye")) break;
@@ -58,7 +58,7 @@ function extractChatResponse(output: string, query: string): string {
       foundContent = true;
     }
   }
-  
+
   if (!foundContent) return "No response found";
   return responseLines.join("\n");
 }

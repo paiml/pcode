@@ -2,10 +2,7 @@ use super::{
     discovery::{DiscoveryError, DiscoveryStrategy, RobustToolDiscovery},
     ToolManifest,
 };
-use crate::security::{
-    manifest::SignedManifest,
-    verified_sandbox::VerifiedSandbox,
-};
+use crate::security::{manifest::SignedManifest, verified_sandbox::VerifiedSandbox};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
@@ -25,30 +22,30 @@ impl Default for SecureToolDiscovery {
 impl SecureToolDiscovery {
     pub fn new() -> Self {
         let mut sandbox = VerifiedSandbox::new();
-        
+
         // Load system trusted keys
         if let Err(e) = sandbox.load_system_trusted_keys() {
             warn!("Failed to load system trusted keys: {}", e);
         }
-        
+
         Self {
             inner: RobustToolDiscovery::new(),
             sandbox,
         }
     }
-    
+
     /// Add a trusted key for manifest verification
     pub fn add_trusted_key(&mut self, public_key: &[u8]) -> Result<(), DiscoveryError> {
         self.sandbox
             .add_trusted_key(public_key)
             .map_err(|e| DiscoveryError::Failed(format!("Failed to add trusted key: {}", e)))
     }
-    
+
     /// Discover and verify tools
     pub async fn discover_verified(&mut self) -> Result<Vec<VerifiedTool>, DiscoveryError> {
         let manifests = self.inner.discover_all().await?;
         let mut verified_tools = Vec::new();
-        
+
         for manifest in manifests {
             // Try to find and verify signed manifest
             match self.verify_tool_manifest(&manifest).await {
@@ -71,10 +68,10 @@ impl SecureToolDiscovery {
                 }
             }
         }
-        
+
         Ok(verified_tools)
     }
-    
+
     /// Verify a tool manifest
     async fn verify_tool_manifest(
         &self,
@@ -82,7 +79,7 @@ impl SecureToolDiscovery {
     ) -> Result<VerifiedTool, DiscoveryError> {
         // Look for signed manifest file
         let manifest_paths = self.find_manifest_files(&manifest.id);
-        
+
         for path in manifest_paths {
             if let Ok(content) = tokio::fs::read_to_string(&path).await {
                 if let Ok(signed_manifest) = serde_json::from_str::<SignedManifest>(&content) {
@@ -93,13 +90,13 @@ impl SecureToolDiscovery {
                             .sandbox
                             .verify_signed_manifest(&signed_manifest)
                             .unwrap_or(false);
-                        
+
                         let trust_level = if is_trusted {
                             TrustLevel::Trusted
                         } else {
                             TrustLevel::ValidSignature
                         };
-                        
+
                         return Ok(VerifiedTool {
                             manifest: manifest.clone(),
                             signed_manifest: Some(signed_manifest),
@@ -110,7 +107,7 @@ impl SecureToolDiscovery {
                 }
             }
         }
-        
+
         // No signed manifest found
         Ok(VerifiedTool {
             manifest: manifest.clone(),
@@ -119,18 +116,18 @@ impl SecureToolDiscovery {
             trust_level: TrustLevel::Untrusted,
         })
     }
-    
+
     /// Find potential manifest files for a tool
     fn find_manifest_files(&self, tool_id: &str) -> Vec<PathBuf> {
         let mut paths = Vec::new();
-        
+
         // Check common locations
         let locations = vec![
             format!("/etc/pcode/manifests/{}.json", tool_id),
             format!("/usr/share/pcode/manifests/{}.json", tool_id),
             format!(".pcode/manifests/{}.json", tool_id),
         ];
-        
+
         // Add user-specific paths
         if let Ok(home) = std::env::var("HOME") {
             paths.push(PathBuf::from(format!(
@@ -142,11 +139,11 @@ impl SecureToolDiscovery {
                 home, tool_id
             )));
         }
-        
+
         for loc in locations {
             paths.push(PathBuf::from(loc));
         }
-        
+
         paths
     }
 }
@@ -179,10 +176,13 @@ impl VerifiedTool {
             TrustLevel::ValidSignature => "?",
             TrustLevel::Untrusted => "✗",
         };
-        
-        format!("{} {} v{}", trust_indicator, self.manifest.name, self.manifest.version)
+
+        format!(
+            "{} {} v{}",
+            trust_indicator, self.manifest.name, self.manifest.version
+        )
     }
-    
+
     /// Check if the tool should be allowed based on policy
     pub fn is_allowed(&self, require_trusted: bool) -> bool {
         if require_trusted {
@@ -204,12 +204,18 @@ impl SignedManifestDiscovery {
             PathBuf::from("/etc/pcode/manifests"),
             PathBuf::from("/usr/share/pcode/manifests"),
         ];
-        
+
         if let Ok(home) = std::env::var("HOME") {
             search_paths.push(PathBuf::from(format!("{}/.pcode/manifests", home)));
         }
-        
+
         Self { search_paths }
+    }
+}
+
+impl Default for SignedManifestDiscovery {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -217,18 +223,19 @@ impl SignedManifestDiscovery {
 impl DiscoveryStrategy for SignedManifestDiscovery {
     async fn discover(&self) -> Result<Vec<ToolManifest>, DiscoveryError> {
         let mut manifests = Vec::new();
-        
+
         for path in &self.search_paths {
             if path.exists() {
                 debug!("Searching for signed manifests in {:?}", path);
-                
+
                 match std::fs::read_dir(path) {
                     Ok(entries) => {
                         for entry in entries.flatten() {
                             if let Some(ext) = entry.path().extension() {
                                 if ext == "json" {
                                     // Try to read and parse
-                                    if let Ok(content) = tokio::fs::read_to_string(entry.path()).await
+                                    if let Ok(content) =
+                                        tokio::fs::read_to_string(entry.path()).await
                                     {
                                         if let Ok(signed) =
                                             serde_json::from_str::<SignedManifest>(&content)
@@ -255,14 +262,14 @@ impl DiscoveryStrategy for SignedManifestDiscovery {
                 }
             }
         }
-        
+
         Ok(manifests)
     }
-    
+
     fn priority(&self) -> u8 {
         90 // High priority, but below MCP server
     }
-    
+
     fn name(&self) -> &str {
         "Signed Manifest Discovery"
     }
@@ -271,15 +278,15 @@ impl DiscoveryStrategy for SignedManifestDiscovery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_secure_discovery() {
         let mut discovery = SecureToolDiscovery::new();
-        
+
         // Should be able to discover tools (at least built-in)
         let verified_tools = discovery.discover_verified().await.unwrap();
         assert!(!verified_tools.is_empty());
-        
+
         // Built-in tools should be untrusted (no signatures)
         let builtin = verified_tools
             .iter()
@@ -287,7 +294,7 @@ mod tests {
             .unwrap();
         assert_eq!(builtin.trust_level, TrustLevel::Untrusted);
     }
-    
+
     #[test]
     fn test_verified_tool_display() {
         let tool = VerifiedTool {
@@ -303,12 +310,12 @@ mod tests {
             is_verified: false,
             trust_level: TrustLevel::Untrusted,
         };
-        
+
         assert_eq!(tool.display_name(), "✗ Test Tool v1.0.0");
         assert!(tool.is_allowed(false));
         assert!(!tool.is_allowed(true));
     }
-    
+
     #[test]
     fn test_trust_levels() {
         let trusted = VerifiedTool {
@@ -324,7 +331,7 @@ mod tests {
             is_verified: true,
             trust_level: TrustLevel::Trusted,
         };
-        
+
         assert_eq!(trusted.display_name(), "✓ Trusted v1.0.0");
         assert!(trusted.is_allowed(true));
     }

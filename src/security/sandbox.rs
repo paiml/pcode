@@ -7,13 +7,13 @@ use std::net::SocketAddr;
 pub trait SecuritySandbox: Send + Sync {
     /// Apply security restrictions based on the policy
     fn apply_restrictions(&self, policy: &SecurityPolicy) -> Result<(), SecurityError>;
-    
+
     /// Verify a manifest signature (for tool verification)
     fn verify_manifest(&self, manifest: &[u8], signature: &[u8]) -> Result<(), SecurityError>;
-    
+
     /// Check if a network connection is allowed
     async fn check_network_access(&self, addr: &SocketAddr) -> Result<(), SecurityError>;
-    
+
     /// Get platform name for logging
     fn platform_name(&self) -> &'static str;
 }
@@ -41,20 +41,22 @@ impl SecuritySandbox for FallbackSandbox {
         // Don't fail, just warn
         Ok(())
     }
-    
+
     fn verify_manifest(&self, _manifest: &[u8], _signature: &[u8]) -> Result<(), SecurityError> {
         // Basic check - just ensure non-empty
         if _manifest.is_empty() || _signature.is_empty() {
-            return Err(SecurityError::InvalidManifest("Empty manifest or signature".to_string()));
+            return Err(SecurityError::InvalidManifest(
+                "Empty manifest or signature".to_string(),
+            ));
         }
         Ok(())
     }
-    
+
     async fn check_network_access(&self, _addr: &SocketAddr) -> Result<(), SecurityError> {
         // Allow all network access on unsupported platforms
         Ok(())
     }
-    
+
     fn platform_name(&self) -> &'static str {
         "unsupported"
     }

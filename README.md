@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-blue.svg)](https://www.rust-lang.org)
-[![Coverage](https://img.shields.io/badge/coverage-75%25-yellow.svg)](QUALITY.md)
+[![Coverage](https://img.shields.io/badge/coverage-80.9%25-green.svg)](QUALITY.md)
 
 Production-grade AI code agent with extreme performance and security requirements.
 
@@ -101,6 +101,9 @@ pcode -i --workdir /path/to/project
 # Show help
 pcode --help
 
+# Show version
+pcode --version
+
 # Run with debug logging
 pcode --debug
 
@@ -172,7 +175,7 @@ This project follows strict PMAT (Pragmatic Metrics for Agile Teams) standards:
 | Metric | Target | Current Status |
 |--------|--------|----------------|
 | Cyclomatic Complexity | ≤ 20 per function | ✅ All pass |
-| Test Coverage | ≥ 80% | 📊 75% |
+| Test Coverage | ≥ 80% | ✅ 80.9% |
 | Technical Debt (SATD) | 0 | ✅ Zero |
 | Test Dependency Graph | < 1.0 | ✅ All independent |
 | Big O Complexity | ≤ O(n) | ✅ All linear or better |
@@ -244,7 +247,7 @@ make bench
 
 With musl target and UPX compression:
 - Debug build: ~50MB
-- Release build: ~8-10MB (approaching <12MB target)
+- Release build: ~5.2MB (✅ achieved <12MB target)
 
 ## 🔒 Security
 
@@ -347,6 +350,7 @@ We've successfully implemented the first phase of code execution:
 - [x] Bash command execution tool
 - [x] Development CLI tool integration (ripgrep, cargo, git, etc.)
 - [x] Single command execution mode (--command flag)
+- [x] Version flag support (--version/-V)
 
 ### 🎯 Next Milestone: Extended Code Execution
 

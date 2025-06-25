@@ -22,10 +22,10 @@ pub enum SecurityError {
 
     #[error("Unsupported platform")]
     UnsupportedPlatform,
-    
+
     #[error("Invalid manifest: {0}")]
     InvalidManifest(String),
-    
+
     #[error("Network access denied: {0}")]
     NetworkAccessDenied(String),
 }

@@ -23,7 +23,7 @@ pub enum McpError {
 
     #[error("Tool not found: {0}")]
     ToolNotFound(String),
-    
+
     #[error("Discovery error: {0}")]
     Discovery(#[from] discovery::DiscoveryError),
 }

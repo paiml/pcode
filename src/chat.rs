@@ -171,9 +171,7 @@ impl InteractiveChat {
         println!("🤖 pcode is a production-grade AI code agent with extreme performance and security requirements.\n");
         println!("Key features:");
         println!("• Interactive chat interface for AI-assisted coding");
-        println!(
-            "• Security sandboxing (Landlock on Linux, platform-specific on macOS/Windows)"
-        );
+        println!("• Security sandboxing (Landlock on Linux, platform-specific on macOS/Windows)");
         println!("• Tool system for file operations, process execution, and more");
         println!("• Token estimation with perfect hash tables");
         println!("• Extreme performance: <200ms latency, <12MB binary size");
@@ -181,9 +179,7 @@ impl InteractiveChat {
     }
 
     fn show_no_api_key_message(&self) {
-        println!(
-            "ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable AI responses."
-        );
+        println!("ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable AI responses.");
         println!("   Type 'help' for available commands or 'tools' to see available tools.");
     }
 

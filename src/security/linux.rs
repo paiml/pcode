@@ -19,7 +19,7 @@ impl LinuxSandbox {
             _manifest_verifier: ManifestVerifier::new(),
         }
     }
-    
+
     fn is_landlock_available(&self) -> bool {
         // Check if Landlock is available
         // This would check kernel version and Landlock support
@@ -66,14 +66,14 @@ impl SecuritySandbox for LinuxSandbox {
 
         Ok(())
     }
-    
+
     fn verify_manifest(&self, manifest: &[u8], signature: &[u8]) -> Result<(), SecurityError> {
         if manifest.is_empty() || signature.is_empty() {
             return Err(SecurityError::InvalidManifest(
                 "Empty manifest or signature".to_string(),
             ));
         }
-        
+
         // For raw verification, we need the public key
         // In a real implementation, the public key would be passed or embedded
         // For now, we just check the sizes are correct
@@ -82,17 +82,17 @@ impl SecuritySandbox for LinuxSandbox {
                 "Invalid signature size".to_string(),
             ));
         }
-        
+
         debug!("Manifest verification on Linux - size check passed");
         Ok(())
     }
-    
+
     async fn check_network_access(&self, addr: &SocketAddr) -> Result<(), SecurityError> {
         // For now, allow all on Linux
         debug!("Checking network access to {:?}", addr);
         Ok(())
     }
-    
+
     fn platform_name(&self) -> &'static str {
         "linux"
     }
@@ -104,9 +104,9 @@ impl LinuxSandbox {
         #[cfg(test)]
         {
             debug!("Skipping memory limit in tests: {} MB", limit_mb);
-            return Ok(());
+            Ok(())
         }
-        
+
         #[cfg(not(test))]
         {
             let limit_bytes = (limit_mb * 1024 * 1024) as libc::rlim_t;
@@ -114,7 +114,7 @@ impl LinuxSandbox {
                 rlim_cur: limit_bytes,
                 rlim_max: limit_bytes,
             };
-            
+
             unsafe {
                 if libc::setrlimit(libc::RLIMIT_AS, &rlimit) != 0 {
                     return Err(SecurityError::InitError(format!(
@@ -123,7 +123,7 @@ impl LinuxSandbox {
                     )));
                 }
             }
-            
+
             debug!("Set memory limit to {} MB", limit_mb);
             Ok(())
         }
@@ -154,18 +154,19 @@ mod tests {
         // Should not fail even if Landlock is not available
         assert!(apply_landlock_sandbox(&policy).is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_linux_sandbox_trait() {
         let sandbox = LinuxSandbox::new();
-        let mut policy = SecurityPolicy::default();
-        // Use a very high memory limit for tests to avoid OOM
-        policy.max_memory_mb = 8192; // 8GB
-        
+        let policy = SecurityPolicy {
+            max_memory_mb: 8192, // 8GB
+            ..Default::default()
+        };
+
         // Test trait methods
         assert!(sandbox.apply_restrictions(&policy).is_ok());
         assert_eq!(sandbox.platform_name(), "linux");
-        
+
         // Test network check
         let addr = "127.0.0.1:8080".parse().unwrap();
         assert!(sandbox.check_network_access(&addr).await.is_ok());

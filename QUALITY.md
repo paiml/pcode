@@ -1,6 +1,6 @@
 # pcode Quality Report
 
-Generated: 2025-06-25
+Generated: 2025-06-25 (Updated)
 
 ## 📊 Quality Metrics
 

@@ -170,21 +170,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_llm_tool() {
-        let tool = LlmTool::new();
+        // Create tool without API key to test error handling
+        let mut tool = LlmTool::new();
+        tool.config.ai_studio_api_key = None;
+
         let params = serde_json::json!({
             "prompt": "Hello, how are you?",
             "max_tokens": 100
         });
 
-        // Test should handle both cases: with and without API key
+        // Test should get error about missing API key
         match tool.execute(params).await {
-            Ok(result) => {
-                // If API key is set, verify response
-                assert!(result["response"].is_string());
-                assert!(result["prompt_tokens"].as_u64().unwrap() > 0);
-            }
+            Ok(_) => panic!("Expected error about missing API key"),
             Err(ToolError::Execution(msg)) => {
-                // If no API key, verify error message
                 assert!(
                     msg.contains("AI_STUDIO_API_KEY not set"),
                     "Expected error about API key, got: {}",
