@@ -38,7 +38,8 @@ impl PmatTool {
     ) -> Result<String, ToolError> {
         // Create a temporary Python script with mock PMAT functionality
         let script = match command {
-            "complexity" => r#"
+            "complexity" => {
+                r#"
 import json
 import sys
 import os
@@ -68,8 +69,10 @@ def analyze_complexity(path):
 if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else "."
     print(json.dumps(analyze_complexity(path)))
-"#,
-            "satd" => r#"
+"#
+            }
+            "satd" => {
+                r#"
 import json
 import sys
 
@@ -90,8 +93,10 @@ def analyze_satd(path):
 if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else "."
     print(json.dumps(analyze_satd(path)))
-"#,
-            "tdg" => r#"
+"#
+            }
+            "tdg" => {
+                r#"
 import json
 import sys
 
@@ -110,8 +115,10 @@ def analyze_tdg(path):
 if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else "."
     print(json.dumps(analyze_tdg(path)))
-"#,
-            "dead-code" => r#"
+"#
+            }
+            "dead-code" => {
+                r#"
 import json
 import sys
 
@@ -130,9 +137,13 @@ def analyze_dead_code(path):
 if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else "."
     print(json.dumps(analyze_dead_code(path)))
-"#,
+"#
+            }
             _ => {
-                return Err(ToolError::InvalidParams(format!("Unknown PMAT command error: {}", command)));
+                return Err(ToolError::InvalidParams(format!(
+                    "Unknown PMAT command error: {}",
+                    command
+                )));
             }
         };
 
@@ -161,7 +172,7 @@ if __name__ == "__main__":
             Ok(Ok(output)) => {
                 // Clean up temp script
                 let _ = std::fs::remove_file(&script_path);
-                
+
                 if output.status.success() {
                     Ok(String::from_utf8_lossy(&output.stdout).to_string())
                 } else {
