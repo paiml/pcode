@@ -82,6 +82,10 @@ This project practices extreme quality using PMAT metrics:
 - **Algorithm Complexity**: Low Big O complexity required
 - **Code Verifiability**: Highly provable code with formal reasoning
 - **Test Coverage**: Maintain 80% test coverage at all times
+- **Mock Code**: ZERO TOLERANCE for mocking - all code must be production-ready
+- **Comments**: ZERO TOLERANCE for TODO, FIXME, HACK, or any SATD comments
+- **Scripts**: NO BASH - Only Deno TypeScript scripts in scripts/*.ts
+- **Script Quality**: All scripts must be tested, linted, type-checked, and formatted
 
 ## Environment Variables
 

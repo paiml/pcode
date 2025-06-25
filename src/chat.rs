@@ -103,18 +103,30 @@ impl InteractiveChat {
 
         // Process natural language input with LLM if available
         if self.config.has_api_key() {
-            // Build a contextual prompt
-            let full_prompt = format!(
-                "{}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
-                SYSTEM_PROMPT, PROJECT_CONTEXT, input
-            );
+            // Check if user is asking about specific files
+            let enhanced_prompt = if input.to_lowercase().contains("readme") {
+                // Read README.md and include it in context
+                let readme_content = match self.read_file("README.md").await {
+                    Ok(content) => format!("\n\nREADME.md content:\n{}", content),
+                    Err(_) => String::new(),
+                };
+                format!(
+                    "{}\n\nContext:\n{}{}\n\nUser: {}\n\nAssistant:",
+                    SYSTEM_PROMPT, PROJECT_CONTEXT, readme_content, input
+                )
+            } else {
+                format!(
+                    "{}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
+                    SYSTEM_PROMPT, PROJECT_CONTEXT, input
+                )
+            };
 
             // Use the LLM tool to process the input
             let request = ToolRequest {
                 tool: "llm".to_string(),
                 params: json!({
-                    "prompt": full_prompt,
-                    "max_tokens": 500,
+                    "prompt": enhanced_prompt,
+                    "max_tokens": 800,
                     "temperature": 0.7
                 }),
             };
@@ -270,6 +282,25 @@ impl InteractiveChat {
             println!("  {} - {}", name, desc);
         }
         println!();
+    }
+
+    async fn read_file(&self, path: &str) -> Result<String> {
+        let request = ToolRequest {
+            tool: "file_read".to_string(),
+            params: json!({ "path": path }),
+        };
+
+        let response = self.registry.execute(request).await;
+
+        if response.success {
+            if let Some(result) = response.result {
+                if let Some(content) = result.get("content").and_then(|v| v.as_str()) {
+                    return Ok(content.to_string());
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("Failed to read file"))
     }
 }
 

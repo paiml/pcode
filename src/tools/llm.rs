@@ -28,6 +28,48 @@ impl LlmTool {
             config: Config::from_env(),
         }
     }
+
+    async fn call_ai_studio(
+        &self,
+        api_key: &str,
+        params: &LlmParams,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let client = reqwest::Client::new();
+
+        // Google AI Studio API endpoint for Gemini
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={}",
+            api_key
+        );
+
+        let request_body = serde_json::json!({
+            "contents": [{
+                "parts": [{
+                    "text": params.prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": params.temperature.unwrap_or(0.7),
+                "maxOutputTokens": params.max_tokens.unwrap_or(500),
+            }
+        });
+
+        let response = client.post(&url).json(&request_body).send().await?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(format!("API error: {}", error_text).into());
+        }
+
+        let json: serde_json::Value = response.json().await?;
+
+        // Extract the text from the response
+        if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+            Ok(text.to_string())
+        } else {
+            Err("Failed to parse AI Studio response".into())
+        }
+    }
 }
 
 impl Default for LlmTool {
@@ -52,20 +94,22 @@ impl Tool for LlmTool {
 
         debug!("LLM request with prompt length: {}", params.prompt.len());
 
-        let response = if let Some(_api_key) = &self.config.ai_studio_api_key {
-            debug!("Using AI Studio API with key");
-            // Here you would make an actual API call to AI Studio
-            // For now, we'll still return a mock but indicate API key is present
-            format!(
-                "[AI Studio API Available] Mock response to: {}",
-                params.prompt.chars().take(50).collect::<String>()
-            )
+        let response = if let Some(api_key) = &self.config.ai_studio_api_key {
+            debug!("Using AI Studio API");
+
+            // Call Google AI Studio API (Gemini)
+            match self.call_ai_studio(api_key, &params).await {
+                Ok(response) => response,
+                Err(e) => {
+                    warn!("AI Studio API call failed: {}", e);
+                    return Err(ToolError::Execution(format!("AI Studio API error: {}", e)));
+                }
+            }
         } else {
-            warn!("No AI_STUDIO_API_KEY environment variable found, using mock response");
-            format!(
-                "Mock response to: {}",
-                params.prompt.chars().take(50).collect::<String>()
-            )
+            warn!("No AI_STUDIO_API_KEY environment variable found");
+            return Err(ToolError::Execution(
+                "AI_STUDIO_API_KEY not set. Please set it to use the LLM tool.".to_string(),
+            ));
         };
 
         let tokenizer = Tokenizer::instance();
@@ -131,9 +175,19 @@ mod tests {
             "max_tokens": 100
         });
 
-        let result = tool.execute(params).await.unwrap();
-        assert!(result["response"].is_string());
-        assert!(result["prompt_tokens"].as_u64().unwrap() > 0);
+        // Test should handle both cases: with and without API key
+        match tool.execute(params).await {
+            Ok(result) => {
+                // If API key is set, verify response
+                assert!(result["response"].is_string());
+                assert!(result["prompt_tokens"].as_u64().unwrap() > 0);
+            }
+            Err(ToolError::Execution(msg)) => {
+                // If no API key, verify error message
+                assert!(msg.contains("AI_STUDIO_API_KEY not set"));
+            }
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
     }
 
     #[tokio::test]

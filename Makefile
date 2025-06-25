@@ -52,19 +52,27 @@ coverage:
 
 # Code quality targets
 .PHONY: lint
-lint: fmt clippy
+lint: fmt clippy deno-check
 
 .PHONY: fmt
 fmt:
 	$(CARGO) fmt -- --check
+	deno fmt --check scripts/
 
 .PHONY: fmt-fix
 fmt-fix:
 	$(CARGO) fmt
+	deno fmt scripts/
 
 .PHONY: clippy
 clippy:
 	$(CARGO) clippy --all-targets --all-features -- -D warnings
+
+.PHONY: deno-check
+deno-check:
+	deno check scripts/*.ts
+	deno lint scripts/
+	deno test --allow-read --allow-env --allow-run scripts/
 
 # Benchmarking
 .PHONY: bench

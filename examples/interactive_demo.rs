@@ -7,8 +7,6 @@ use pcode::{
         ToolRegistry,
     },
 };
-use tokio;
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

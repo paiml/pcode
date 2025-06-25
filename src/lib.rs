@@ -49,7 +49,7 @@ mod tests {
         let pcode_err: PcodeError = security_err.into();
         assert!(matches!(pcode_err, PcodeError::Security(_)));
 
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let io_err = std::io::Error::other("test");
         let pcode_err: PcodeError = io_err.into();
         assert!(matches!(pcode_err, PcodeError::Io(_)));
     }
