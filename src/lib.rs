@@ -31,3 +31,30 @@ pub enum PcodeError {
 }
 
 pub type Result<T> = std::result::Result<T, PcodeError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_conversions() {
+        // Test From implementations
+        let runtime_err = runtime::RuntimeError::Creation("test".to_string());
+        let pcode_err: PcodeError = runtime_err.into();
+        assert!(matches!(pcode_err, PcodeError::Runtime(_)));
+
+        let security_err = security::SecurityError::InitError("test".to_string());
+        let pcode_err: PcodeError = security_err.into();
+        assert!(matches!(pcode_err, PcodeError::Security(_)));
+
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let pcode_err: PcodeError = io_err.into();
+        assert!(matches!(pcode_err, PcodeError::Io(_)));
+    }
+
+    #[test]
+    fn test_error_display() {
+        let err = PcodeError::Other("Custom error".to_string());
+        assert_eq!(err.to_string(), "Other error: Custom error");
+    }
+}

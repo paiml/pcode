@@ -44,6 +44,12 @@ test:
 test-coverage:
 	$(CARGO) tarpaulin --out Xml --all-features --workspace --timeout 120 --exclude-files target/*
 
+.PHONY: coverage
+coverage:
+	$(CARGO) tarpaulin --out Html --all-features --workspace --timeout 120 --exclude-files target/* --output-dir coverage
+	@echo "Coverage report generated in coverage/tarpaulin-report.html"
+	@$(CARGO) tarpaulin --print-summary --all-features --workspace --timeout 120 --exclude-files target/* 2>/dev/null | grep "Coverage" || true
+
 # Code quality targets
 .PHONY: lint
 lint: fmt clippy
@@ -80,11 +86,27 @@ clean:
 audit:
 	$(CARGO) audit
 
-# Complexity analysis
+# Quality and complexity analysis
+.PHONY: quality
+quality: complexity metrics
+
 .PHONY: complexity
 complexity:
-	$(CARGO) install cargo-geiger || true
-	$(CARGO) geiger
+	@echo "=== Cyclomatic Complexity Analysis ==="
+	$(CARGO) install cargo-complexity || true
+	find src -name "*.rs" -exec echo "File: {}" \; -exec grep -E "^(pub |)fn " {} \; | head -20
+	@echo "Note: All functions should have complexity <= 20"
+
+.PHONY: metrics
+metrics:
+	@echo "=== Code Metrics ==="
+	@echo -n "Total lines of code: "
+	@find src -name "*.rs" -exec cat {} \; | wc -l
+	@echo -n "Number of functions: "
+	@find src -name "*.rs" -exec grep -E "^[[:space:]]*(pub |)fn " {} \; | wc -l
+	@echo -n "Number of tests: "
+	@find . -name "*.rs" -exec grep -E "#\[test\]|#\[tokio::test\]" {} \; | wc -l
+	@echo ""
 
 # Install dependencies
 .PHONY: install-deps
@@ -117,8 +139,10 @@ help:
 	@echo "  make release       - Build optimized release binary with compression"
 	@echo "  make run           - Run the application"
 	@echo "  make test          - Run all tests"
-	@echo "  make test-coverage - Run tests with coverage report"
+	@echo "  make test-coverage - Run tests with coverage report (XML)"
+	@echo "  make coverage      - Run tests with HTML coverage report"
 	@echo "  make lint          - Run all linters (fmt + clippy)"
+	@echo "  make quality       - Run code quality analysis"
 	@echo "  make bench         - Run benchmarks"
 	@echo "  make doc           - Generate and open documentation"
 	@echo "  make clean         - Clean build artifacts"

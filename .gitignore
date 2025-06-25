@@ -28,3 +28,7 @@ target/
 # Environment files
 .env
 .env.local
+
+# Coverage reports
+coverage/
+tarpaulin-report.*
