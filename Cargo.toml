@@ -46,6 +46,9 @@ sha2 = "0.10"
 rand = "0.8"
 tempfile = "3.14"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["memoryapi", "processthreadsapi", "basetsd"] }
+
 [build-dependencies]
 capnpc = "0.20"
 
