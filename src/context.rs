@@ -108,9 +108,8 @@ mod tests {
 
     #[test]
     fn test_prompts_are_not_empty() {
-        // Basic sanity checks
-        assert!(SYSTEM_PROMPT.len() > 0);
-        assert!(PROJECT_CONTEXT.len() > 0);
+        // Basic sanity checks - these are compile-time constants
+        // so we just verify they have reasonable length
         assert!(SYSTEM_PROMPT.len() > 100);
         assert!(PROJECT_CONTEXT.len() > 100);
     }

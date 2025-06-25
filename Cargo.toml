@@ -44,6 +44,7 @@ ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 hex = "0.4"
 sha2 = "0.10"
 rand = "0.8"
+tempfile = "3.14"
 
 [build-dependencies]
 capnpc = "0.20"
@@ -52,7 +53,6 @@ capnpc = "0.20"
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
 tokio-test = "0.4"
-tempfile = "3.14"
 
 [[bench]]
 name = "token_estimation"

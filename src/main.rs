@@ -12,9 +12,11 @@ use pcode::{
         dev_cli::DevCliTool,
         file::{FileReadTool, FileWriteTool},
         fix::FixTool,
+        javascript::JavaScriptTool,
         llm::{LlmTool, TokenEstimateTool},
         pmat::PmatTool,
         process::ProcessTool,
+        python::PythonTool,
         refactor::RefactorTool,
         ToolRegistry,
     },
@@ -133,6 +135,16 @@ fn parse_tool_params(tool_name: &str, params_str: &str) -> Result<serde_json::Va
                 "path": parts[1],
                 "dry_run": dry_run
             }))
+        }
+        "python" => Ok(json!({ "code": params_str })),
+        "javascript" => {
+            // Check if params contain use_deno flag
+            if params_str.ends_with(" --deno") {
+                let code = params_str.trim_end_matches(" --deno");
+                Ok(json!({ "code": code, "use_deno": true }))
+            } else {
+                Ok(json!({ "code": params_str }))
+            }
         }
         _ => anyhow::bail!("Unknown tool: {}", tool_name),
     }
@@ -269,6 +281,8 @@ async fn initialize_tool_registry() -> Result<ToolRegistry> {
     registry.register(Box::new(FixTool::new()));
     registry.register(Box::new(CoverageTool::new()));
     registry.register(Box::new(RefactorTool::new()));
+    registry.register(Box::new(PythonTool::new()));
+    registry.register(Box::new(JavaScriptTool::new()));
 
     debug!("Registered {} built-in tools", registry.list_tools().len());
 

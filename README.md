@@ -22,11 +22,16 @@ Production-grade AI code agent with extreme performance and security requirement
 - **Capability-Based Security**: Granular control over file, network, and process access
 - **Zero Network Access**: Except through MCP tools
 
-### Tools & Capabilities
+### Tools & Capabilities (13 Built-in Tools)
 - **File Operations**: Read/write with path restrictions
 - **Process Execution**: Sandboxed command execution with timeout
-- **LLM Integration**: Google AI Studio support with Gemini 2.5 Flash (API key required)
+- **Code Execution**: Sandboxed Python and JavaScript/TypeScript execution
+- **LLM Integration**: Google AI Studio support with Gemini 2.0 Flash (API key required)
 - **Token Estimation**: Fast and accurate token counting
+- **Code Analysis**: PMAT integration for complexity, SATD, coverage, and TDG
+- **Development Tools**: Bash, ripgrep, cargo, git integration
+- **Code Quality**: Real coverage analysis with tarpaulin
+- **AI Refactoring**: Intelligent code improvement suggestions
 - **MCP Protocol**: Extensible tool system via Cap'n Proto
 
 ## 📦 Installation
@@ -134,11 +139,16 @@ pcode> /pmat complexity src/         # Analyze code complexity
 pcode> /pmat satd .                  # Find technical debt
 pcode> /bash find . -name "*.rs"     # Run bash commands
 pcode> /dev_cli rg TODO              # Use ripgrep to find TODOs
+pcode> /fix format src/main.rs       # Auto-format code
+pcode> /coverage                     # Run code coverage analysis
+pcode> /refactor src/complex.rs      # Get refactoring suggestions
+pcode> /python print("Hello!")       # Run Python code
+pcode> /javascript console.log("Hi") # Run JavaScript code
 pcode> clear                         # Clear screen
 pcode> exit                          # Exit pcode
 ```
 
-### Available Tools
+### Available Tools (13)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -150,8 +160,11 @@ pcode> exit                          # Exit pcode
 | `pmat` | Run code quality analysis | `command`, `path`, `language?` |
 | `bash` | Execute bash commands | `command` |
 | `dev_cli` | Run dev tools (rg, cargo, git) | `tool`, `args` |
+| `fix` | Auto-fix code issues | `fix_type`, `path`, `dry_run?` |
 | `coverage` | Real code coverage with tarpaulin | `path?`, `format?`, `exclude_files?` |
 | `refactor` | AI-powered code refactoring | `path`, `auto_apply?`, `focus?` |
+| `python` | Execute Python code securely | `code`, `timeout_ms?`, `stdin?`, `args?` |
+| `javascript` | Execute JavaScript/TypeScript | `code`, `timeout_ms?`, `use_deno?`, `args?` |
 
 ### Example: Dogfooding
 
@@ -413,9 +426,9 @@ We've successfully implemented the first phase of code execution:
 - [x] Real coverage integration with cargo-tarpaulin
 
 #### Phase 3: General Code Execution
-- [ ] Implement sandboxed code execution for multiple languages:
-  - [ ] Python (via embedded interpreter or subprocess)
-  - [ ] JavaScript/TypeScript (via Deno)
+- [x] Implement sandboxed code execution for multiple languages:
+  - [x] Python (via subprocess with security flags)
+  - [x] JavaScript/TypeScript (via Deno/Node.js)
   - [ ] Rust (via cargo)
   - [ ] Shell scripts (carefully sandboxed)
 - [ ] Add code compilation and build support

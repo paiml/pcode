@@ -3,9 +3,11 @@ pub mod coverage;
 pub mod dev_cli;
 pub mod file;
 pub mod fix;
+pub mod javascript;
 pub mod llm;
 pub mod pmat;
 pub mod process;
+pub mod python;
 pub mod refactor;
 pub mod stream_exec;
 
