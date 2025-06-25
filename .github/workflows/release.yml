@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: pcode-linux-amd64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: pcode-darwin-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: pcode-darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: pcode-windows-amd64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      
+      - name: Strip binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          strip target/${{ matrix.target }}/release/pcode
+      
+      - name: Rename binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{ matrix.target }}/release/pcode.exe ${{ matrix.name }}
+          else
+            cp target/${{ matrix.target }}/release/pcode ${{ matrix.name }}
+          fi
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create checksums
+        run: |
+          cd artifacts
+          for dir in */; do
+            (cd "$dir" && sha256sum * > ../"${dir%/}.sha256")
+          done
+          cd ..
+          sha256sum artifacts/*.sha256 > checksums.txt
+      
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: pcode ${{ steps.version.outputs.version }}
+          body: |
+            # pcode ${{ steps.version.outputs.version }}
+            
+            Production-grade AI code agent with extreme performance and security.
+            
+            ## Installation
+            
+            ### Linux (x86_64)
+            ```bash
+            curl -L https://github.com/paiml/pcode/releases/download/${{ steps.version.outputs.version }}/pcode-linux-amd64 -o pcode
+            chmod +x pcode
+            sudo mv pcode /usr/local/bin/
+            ```
+            
+            ### macOS (Intel)
+            ```bash
+            curl -L https://github.com/paiml/pcode/releases/download/${{ steps.version.outputs.version }}/pcode-darwin-amd64 -o pcode
+            chmod +x pcode
+            sudo mv pcode /usr/local/bin/
+            ```
+            
+            ### macOS (Apple Silicon)
+            ```bash
+            curl -L https://github.com/paiml/pcode/releases/download/${{ steps.version.outputs.version }}/pcode-darwin-arm64 -o pcode
+            chmod +x pcode
+            sudo mv pcode /usr/local/bin/
+            ```
+            
+            ### Windows
+            ```powershell
+            Invoke-WebRequest -Uri "https://github.com/paiml/pcode/releases/download/${{ steps.version.outputs.version }}/pcode-windows-amd64.exe" -OutFile "pcode.exe"
+            ```
+            
+            ## Features
+            - 13 built-in tools including Python and JavaScript execution
+            - 83 passing tests with 80.9% coverage
+            - 5.2MB binary size (Linux)
+            - Sandboxed execution without admin privileges
+            
+            See [README.md](https://github.com/paiml/pcode#readme) for full documentation.
+          files: |
+            artifacts/**/pcode*
+            checksums.txt

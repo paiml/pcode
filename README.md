@@ -36,12 +36,28 @@ Production-grade AI code agent with extreme performance and security requirement
 
 ## 📦 Installation
 
-### Prerequisites
+### Quick Install (Recommended)
+
+Install the latest release with a single command:
+
+```bash
+# Linux/macOS
+curl -sSL https://raw.githubusercontent.com/paiml/pcode/main/install.sh | bash
+
+# Or with wget
+wget -qO- https://raw.githubusercontent.com/paiml/pcode/main/install.sh | bash
+```
+
+### Manual Download
+
+Download pre-built binaries from the [releases page](https://github.com/paiml/pcode/releases).
+
+### Building from Source
+
+Prerequisites:
 - Rust 1.70+ (2021 edition)
 - For optimal binary size: `rustup target add x86_64-unknown-linux-musl`
 - Optional: UPX for binary compression
-
-### Building from Source
 
 ```bash
 # Clone the repository
