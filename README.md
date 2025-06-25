@@ -104,8 +104,9 @@ pcode --help
 # Run with debug logging
 pcode --debug
 
-# Execute a single command (coming soon)
-pcode --command "read src/main.rs"
+# Execute a single command
+pcode --command "/file_read src/main.rs"
+pcode -c "/pmat complexity src/"
 
 # Set memory limit
 pcode --max-memory 1024
@@ -128,6 +129,8 @@ pcode> /llm Explain this code        # Query the LLM (requires API key)
 pcode> /token_estimate text          # Estimate token count
 pcode> /pmat complexity src/         # Analyze code complexity
 pcode> /pmat satd .                  # Find technical debt
+pcode> /bash find . -name "*.rs"     # Run bash commands
+pcode> /dev_cli rg TODO              # Use ripgrep to find TODOs
 pcode> clear                         # Clear screen
 pcode> exit                          # Exit pcode
 ```
@@ -142,6 +145,8 @@ pcode> exit                          # Exit pcode
 | `llm` | Interact with language model | `prompt`, `max_tokens?`, `temperature?` |
 | `token_estimate` | Estimate token count | `text`, `fast?` |
 | `pmat` | Run code quality analysis | `command`, `path`, `language?` |
+| `bash` | Execute bash commands | `command` |
+| `dev_cli` | Run dev tools (rg, cargo, git) | `tool`, `args` |
 
 ### Example: Dogfooding
 
@@ -320,13 +325,16 @@ PMAT runs Python code in a sandboxed environment with:
 
 ## 🏗️ Roadmap
 
-### ✅ Completed: PMAT Integration (Phase 1)
+### ✅ Completed: Code Execution (Phase 1)
 
-We've successfully implemented the first phase of code execution through PMAT integration:
-- [x] Sandboxed Python execution
-- [x] Complexity analysis 
+We've successfully implemented the first phase of code execution:
+- [x] PMAT integration with sandboxed Python execution
+- [x] Complexity analysis for Python and Rust
 - [x] Technical debt detection
 - [x] Secure code execution framework
+- [x] Bash command execution tool
+- [x] Development CLI tool integration (ripgrep, cargo, git, etc.)
+- [x] Single command execution mode (--command flag)
 
 ### 🎯 Next Milestone: Extended Code Execution
 
@@ -334,7 +342,7 @@ We've successfully implemented the first phase of code execution through PMAT in
 - [ ] Add test coverage analysis
 - [ ] Implement test dependency graph (TDG) analysis
 - [ ] Support for JavaScript/TypeScript analysis
-- [ ] Support for Rust code analysis
+- [x] Support for Rust code analysis
 - [ ] Integration with AI for automatic refactoring
 
 #### Phase 3: General Code Execution
