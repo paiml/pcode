@@ -5,6 +5,12 @@ use tracing::{debug, warn};
 
 pub struct LinuxSandbox;
 
+impl Default for LinuxSandbox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinuxSandbox {
     pub fn new() -> Self {
         Self

@@ -3,7 +3,7 @@ use clap::Parser;
 use pcode::{
     chat::InteractiveChat,
     config::Config,
-    mcp::McpProtocol,
+    mcp::{discovery::RobustToolDiscovery, McpProtocol},
     runtime::Runtime,
     security::{SecurityContext, SecurityPolicy},
     tools::{
@@ -251,6 +251,44 @@ async fn async_main(args: Args) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn initialize_tool_registry() -> Result<ToolRegistry> {
+    let mut registry = ToolRegistry::new();
+    
+    // Register built-in tools first
+    registry.register(Box::new(FileReadTool));
+    registry.register(Box::new(FileWriteTool));
+    registry.register(Box::new(ProcessTool));
+    registry.register(Box::new(LlmTool::new()));
+    registry.register(Box::new(TokenEstimateTool));
+    registry.register(Box::new(PmatTool::new()));
+    registry.register(Box::new(BashTool::new()));
+    registry.register(Box::new(DevCliTool::new()));
+    registry.register(Box::new(FixTool::new()));
+    
+    debug!("Registered {} built-in tools", registry.list_tools().len());
+    
+    // Discover additional tools
+    let mut discovery = RobustToolDiscovery::new();
+    match discovery.discover_all().await {
+        Ok(manifests) => {
+            info!("Discovered {} tool manifests", manifests.len());
+            // In a real implementation, we would create tool wrappers for discovered tools
+            // For now, we just log them
+            for manifest in manifests {
+                debug!("Discovered tool manifest: {} v{}", manifest.name, manifest.version);
+                for tool in &manifest.tools {
+                    debug!("  - Tool: {}", tool.name);
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Tool discovery failed: {}, using built-in tools only", e);
+        }
+    }
+    
+    Ok(registry)
 }
 
 #[cfg(test)]

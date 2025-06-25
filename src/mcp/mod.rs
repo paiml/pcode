@@ -1,3 +1,4 @@
+pub mod discovery;
 pub mod protocol;
 pub mod transport;
 
@@ -19,6 +20,26 @@ pub enum McpError {
 
     #[error("Tool not found: {0}")]
     ToolNotFound(String),
+    
+    #[error("Discovery error: {0}")]
+    Discovery(#[from] discovery::DiscoveryError),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolManifest {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub executable: Option<String>,
+    pub tools: Vec<ToolDefinition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub input_schema: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

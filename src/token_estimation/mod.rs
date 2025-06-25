@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 use tracing::debug;
 
 // Include the generated lookup table
-const TOKEN_TABLE: [u16; 131072] = include!(concat!(env!("OUT_DIR"), "/token_table.rs"));
+static TOKEN_TABLE: [u16; 131072] = include!(concat!(env!("OUT_DIR"), "/token_table.rs"));
 
 static TOKENIZER: OnceLock<CompactTokenCounter> = OnceLock::new();
 
@@ -48,10 +48,8 @@ impl BpeRuleset {
         
         // Try to match common merges
         for (left, right, _) in &self.merges {
-            if bytes.starts_with(left) {
-                if right.is_empty() || bytes[left.len()..].starts_with(right) {
-                    return (1, left.len() + right.len());
-                }
+            if bytes.starts_with(left) && (right.is_empty() || bytes[left.len()..].starts_with(right)) {
+                return (1, left.len() + right.len());
             }
         }
         
