@@ -1,221 +1,766 @@
-Of course. This is an excellent project idea that builds on the strengths of `pmat` and addresses a clear need for a more open, extensible, and terminal-native AI coding agent.
+# pcode: Production AI Code Agent - Final Specification v2.0
 
-Here is a complete specification document for `pcode`, designed to be the foundational plan for the new open-source project. It mirrors the style and philosophy of the `pmat` README you provided.
+## Executive Summary
 
----
+`pcode` is a deterministic, security-first AI code agent achieving <200ms first-token latency through a simplified architecture that prioritizes maintainability without sacrificing performance. Key changes from v1.0:
 
-# `pcode-spec.md`
+- **Unified async runtime** using Tokio with custom schedulers, eliminating the triple-runtime complexity
+- **Self-contained token estimation** using a 256KB perfect hash table, removing ML dependencies
+- **Cross-platform security** via abstraction layer supporting Linux (Landlock), macOS (Sandbox), and Windows (AppContainer)
+- **Graceful degradation** for all advanced features with automatic fallback paths
 
-# pcode: The Pragmatic AI Code Agent
+Target metrics: 12MB stripped binary (musl), 20MB RSS baseline, 150ms p99 first-token latency.
 
-[![CI/CD](https://github.com/paiml/pcode/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/paiml/pcode/actions/workflows/main.yml) [![Multi-LLM](https://img.shields.io/badge/LLM-Agnostic-blueviolet)](https://github.com/paiml/pcode#llm-provider-support) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Core Architecture
 
-**A universal, terminal-first AI coding agent that works with any LLM.** `pcode` integrates seamlessly with local tools like `pmat` via the Model-Context-Protocol (MCP) to provide grounded, fact-based coding assistance directly in your shell.
+### Unified Runtime Design
 
-## Core Philosophy
+We consolidate to a single Tokio runtime with custom task schedulers for different workload types:
 
-Modern LLMs are powerful but lack direct, verifiable access to your local codebase context. `pcode` solves this by acting as a smart orchestrator. It uses deterministic local tools (`pmat`) to generate high-fidelity context, combines it with your prompt, and then queries the LLM of your choice—be it a local model via Ollama or a powerful cloud API like Google's Gemini.
+```rust
+// src/runtime/unified.rs
+pub struct UnifiedRuntime {
+    rt: tokio::runtime::Runtime,
+    schedulers: SchedulerSet,
+}
 
-This project is the open-source spiritual successor to agent concepts like Claude Code, built for maximum extensibility and developer control.
+struct SchedulerSet {
+    // UI tasks: low latency, high priority
+    ui_scheduler: PriorityScheduler,
+    // Tool tasks: CPU-bound, isolated
+    tool_scheduler: IsolatedScheduler,
+    // LLM tasks: I/O-bound, streaming
+    llm_scheduler: StreamScheduler,
+}
 
-## Key Features
+impl UnifiedRuntime {
+    pub fn new() -> Result<Self> {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        
+        // Detect CPU topology but handle heterogeneous architectures
+        let topology = CpuTopology::detect();
+        
+        match topology {
+            CpuTopology::Homogeneous(cores) => {
+                builder.worker_threads(cores);
+                builder.on_thread_start(move || {
+                    // Simple round-robin affinity
+                    let worker_id = WORKER_COUNTER.fetch_add(1, Ordering::Relaxed);
+                    set_cpu_affinity(worker_id % cores);
+                });
+            }
+            CpuTopology::Heterogeneous { p_cores, e_cores } => {
+                // Use P-cores for latency-sensitive work
+                builder.worker_threads(p_cores.len());
+                builder.on_thread_start(move || {
+                    let worker_id = WORKER_COUNTER.fetch_add(1, Ordering::Relaxed);
+                    // Pin to P-cores only
+                    set_cpu_affinity(p_cores[worker_id % p_cores.len()]);
+                });
+            }
+            CpuTopology::Unknown => {
+                // No affinity, let OS scheduler decide
+                builder.worker_threads(num_cpus::get());
+            }
+        }
+        
+        let rt = builder.build()?;
+        
+        Ok(Self {
+            rt,
+            schedulers: SchedulerSet::new(),
+        })
+    }
+}
 
-- **LLM Agnostic:** Works out-of-the-box with Ollama, Google AI Studio (Gemini), OpenAI, and more. Easily switch providers with a single command.
-- **Deep `pmat` Integration:** Natively understands and utilizes the `pmat` toolkit via MCP to answer questions with verifiable data, not just statistical guesses.
-- **Terminal-First:** A beautiful, responsive, and powerful terminal UI designed for professional developers.
-- **Zero Configuration (Almost):** Installs as a single, static binary. It automatically discovers `pmat` and works instantly with Ollama if detected.
-- **Extensible Tooling:** Register any CLI tool to the agent's context, allowing `pcode` to use your custom scripts and programs.
-- **Pure Rust:** Blazing fast, memory-safe, and produces a tiny, dependency-free binary.
+// CPU topology detection with heterogeneous support
+#[derive(Debug)]
+enum CpuTopology {
+    Homogeneous(usize),
+    Heterogeneous { p_cores: Vec<usize>, e_cores: Vec<usize> },
+    Unknown,
+}
 
-## 🚀 Installation
-
-Following the `pmat` philosophy, installation is a single, simple command.
-
-```bash
-# Installs the 'pcode' binary to ~/.local/bin
-curl -sSfL https://raw.githubusercontent.com/paiml/pcode/master/scripts/install.sh | sh
-```
-
-## 📋 Quick Start: Core Usage
-
-The core of `pcode` is an interactive chat session. It automatically detects `pmat` and uses it when a prompt requires deep code analysis.
-
-```bash
-# Start an interactive session
-pcode
-
-# pcode > Tell me about the complexity of my current project.
-#
-# 🤖 pcode is thinking...
-#    (running `pmat analyze complexity --format json` in the background)
-#
-# Based on analysis from `pmat`, your project has:
-# - A total cyclomatic complexity of 452.
-# - The top 3 most complex files are:
-#   1. `src/main.rs` (Complexity: 89)
-#   2. `src/utils/parser.rs` (Complexity: 62)
-#   3. `src/types.rs` (Complexity: 41)
-#
-# Would you like me to suggest refactoring targets for `src/main.rs`?
-```
-
-## 🏛️ Architectural Overview
-
-`pcode` is built on a simple, powerful, and modular architecture.
-
-```mermaid
-graph TD
-    subgraph User Terminal
-        A[User Prompt] --> B{pcode CLI};
-    end
-
-    subgraph pcode Agent Core
-        B --> C{Context Engine};
-        C -- Determines if tool is needed --> D[MCP Tool Registry];
-        D -- Scans PATH for pmat --> E{pmat CLI};
-        E -- Returns structured JSON --> C;
-        C -- Combines prompt + tool output --> F[LLM Provider Abstraction];
-        F -- Sends rich prompt to --> G[Configured LLM];
-        G -- Streams response back --> B;
-    end
+impl CpuTopology {
+    #[cfg(target_os = "macos")]
+    fn detect() -> Self {
+        // Use sysctlbyname to detect P/E cores on Apple Silicon
+        use std::mem;
+        
+        let mut p_cores = 0u32;
+        let mut p_size = mem::size_of::<u32>();
+        
+        unsafe {
+            if sysctlbyname(
+                b"hw.perflevel0.physicalcpu\0".as_ptr() as *const _,
+                &mut p_cores as *mut _ as *mut _,
+                &mut p_size,
+                std::ptr::null_mut(),
+                0
+            ) == 0 {
+                let mut e_cores = 0u32;
+                let mut e_size = mem::size_of::<u32>();
+                
+                if sysctlbyname(
+                    b"hw.perflevel1.physicalcpu\0".as_ptr() as *const _,
+                    &mut e_cores as *mut _ as *mut _,
+                    &mut e_size,
+                    std::ptr::null_mut(),
+                    0
+                ) == 0 && e_cores > 0 {
+                    // Apple Silicon with P+E cores
+                    return CpuTopology::Heterogeneous {
+                        p_cores: (0..p_cores as usize).collect(),
+                        e_cores: (p_cores as usize..(p_cores + e_cores) as usize).collect(),
+                    };
+                }
+            }
+        }
+        
+        CpuTopology::Homogeneous(num_cpus::get())
+    }
     
-    subgraph LLM Backends
-        G -- Can be --> H[Ollama];
-        G -- Can be --> I[Google AI API];
-        G -- Can be --> J[OpenAI API];
-        G -- Can be --> K[... any other];
-    end
-
-    B --> L[Stream Response to User];
+    #[cfg(target_os = "linux")]
+    fn detect() -> Self {
+        // Check for Intel hybrid via cpuinfo
+        if let Ok(cpuinfo) = std::fs::read_to_string("/proc/cpuinfo") {
+            // Detect Intel 12th gen+ hybrid
+            if cpuinfo.contains("core_type") {
+                // Parse P/E cores from sysfs
+                // Implementation omitted for brevity
+            }
+        }
+        
+        CpuTopology::Homogeneous(num_cpus::get())
+    }
+    
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    fn detect() -> Self {
+        CpuTopology::Unknown
+    }
+}
 ```
 
-1.  **CLI:** A robust terminal interface built with `clap` and `ratatui`.
-2.  **MCP Tool Registry:** On startup, scans for `pmat` and other registered tools. It understands what each tool can do based on a manifest.
-3.  **Context Engine:** The brain of the agent. It analyzes the user's prompt and decides if it can be better answered by first calling a local tool to get factual data.
-4.  **LLM Provider Abstraction:** A `trait` that defines a common interface for interacting with any LLM, making the system plug-and-play.
+### Efficient Work Distribution
 
-## 🔧 LLM Provider Support
+Replace spin-waiting with async coordination:
 
-Configure `pcode` to use your preferred LLM provider. The configuration is stored in `~/.config/pcode/config.toml`.
+```rust
+// src/runtime/scheduler.rs
+pub struct IsolatedScheduler {
+    queue: Arc<SegQueue<ToolTask>>,
+    notify: Arc<Notify>,
+}
 
-```bash
-# Switch to a local Llama 3 model via Ollama
-pcode config set provider ollama
-pcode config set model llama3
-
-# Switch to Google's Gemini 1.5 Pro
-pcode config set provider google
-pcode config set api_key "YOUR_GOOGLE_API_KEY"
-pcode config set model gemini-1.5-pro-latest
-
-# Check current configuration
-pcode config get
+impl IsolatedScheduler {
+    pub async fn submit(&self, task: ToolTask) -> ToolResult {
+        let (tx, rx) = oneshot::channel();
+        self.queue.push(ToolTask { inner: task, result: tx });
+        self.notify.notify_one();
+        rx.await.unwrap()
+    }
+    
+    pub async fn worker_loop(self: Arc<Self>) {
+        loop {
+            // Async wait instead of spin
+            if self.queue.is_empty() {
+                self.notify.notified().await;
+            }
+            
+            if let Some(task) = self.queue.pop() {
+                // Use spawn_blocking for CPU-bound work
+                let result = tokio::task::spawn_blocking(move || {
+                    execute_tool_isolated(task.inner)
+                }).await.unwrap();
+                
+                let _ = task.result.send(result);
+            }
+        }
+    }
+}
 ```
 
-### `config.toml` Example
+## Self-Contained Token Estimation
+
+Replace the neural network with a compact, deterministic approach:
+
+```rust
+// src/context/token_counter.rs
+pub struct CompactTokenCounter {
+    // 256KB lookup table for common patterns
+    pattern_table: Box<[u16; 131072]>, // 2^17 entries
+    // Simple BPE rules for fallback
+    bpe_rules: BpeRuleset,
+}
+
+impl CompactTokenCounter {
+    pub fn new() -> Self {
+        // Build at compile time from a minimal BPE vocabulary
+        const TABLE: [u16; 131072] = include!(concat!(env!("OUT_DIR"), "/token_table.rs"));
+        
+        Self {
+            pattern_table: Box::new(TABLE),
+            bpe_rules: BpeRuleset::minimal(),
+        }
+    }
+    
+    pub fn count_tokens(&self, text: &str) -> usize {
+        let mut tokens = 0;
+        let bytes = text.as_bytes();
+        let mut i = 0;
+        
+        while i < bytes.len() {
+            // Try to match longest pattern in lookup table
+            let mut matched = false;
+            
+            for len in (1..=8).rev() {
+                if i + len <= bytes.len() {
+                    let hash = xxhash_rust::xxh3::xxh3_64(&bytes[i..i+len]) as usize;
+                    let index = hash & 0x1FFFF; // Mask to 17 bits
+                    
+                    if self.pattern_table[index] != 0 {
+                        tokens += self.pattern_table[index] as usize;
+                        i += len;
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            
+            if !matched {
+                // Fallback to simple BPE
+                let (token_count, bytes_consumed) = self.bpe_rules.tokenize_at(&bytes[i..]);
+                tokens += token_count;
+                i += bytes_consumed;
+            }
+        }
+        
+        tokens
+    }
+}
+
+// Minimal BPE implementation (2KB of rules)
+struct BpeRuleset {
+    merges: Vec<(Vec<u8>, Vec<u8>, u16)>, // (left, right, token_count)
+}
+
+impl BpeRuleset {
+    fn minimal() -> Self {
+        // Include only the most common 1000 merges
+        Self {
+            merges: vec![
+                (b"th".to_vec(), b"e".to_vec(), 1),
+                (b"in".to_vec(), b"g".to_vec(), 1),
+                // ... generated from corpus analysis
+            ],
+        }
+    }
+}
+```
+
+Build script generates the lookup table:
+
+```rust
+// build.rs
+fn generate_token_table() {
+    let mut table = [0u16; 131072];
+    
+    // Analyze common code patterns
+    let patterns = analyze_code_corpus("data/code_corpus.txt");
+    
+    for (pattern, token_count) in patterns {
+        let hash = xxhash_rust::xxh3::xxh3_64(pattern.as_bytes()) as usize;
+        let index = hash & 0x1FFFF;
+        
+        // Handle collisions by keeping lower token count
+        if table[index] == 0 || token_count < table[index] {
+            table[index] = token_count.min(u16::MAX);
+        }
+    }
+    
+    // Write table
+    let out_path = Path::new(&env::var("OUT_DIR").unwrap()).join("token_table.rs");
+    let mut file = File::create(out_path).unwrap();
+    write!(file, "[").unwrap();
+    for (i, &count) in table.iter().enumerate() {
+        if i > 0 { write!(file, ",").unwrap(); }
+        write!(file, "{}", count).unwrap();
+    }
+    write!(file, "]").unwrap();
+}
+```
+
+## Tool Discovery with Fallback
+
+Implement a robust discovery mechanism with multiple strategies:
+
+```rust
+// src/mcp/discovery.rs
+pub struct RobustToolDiscovery {
+    strategies: Vec<Box<dyn DiscoveryStrategy>>,
+}
+
+#[async_trait]
+trait DiscoveryStrategy: Send + Sync {
+    async fn discover(&self) -> Result<Vec<ToolManifest>>;
+    fn priority(&self) -> u8;
+}
+
+impl RobustToolDiscovery {
+    pub fn new() -> Self {
+        let mut strategies: Vec<Box<dyn DiscoveryStrategy>> = vec![];
+        
+        // Try eBPF first (fastest, most secure)
+        #[cfg(target_os = "linux")]
+        if let Ok(ebpf) = EbpfDiscovery::new() {
+            strategies.push(Box::new(ebpf));
+        }
+        
+        // Filesystem watcher as fallback
+        strategies.push(Box::new(FsWatcherDiscovery::new()));
+        
+        // PATH scanning as last resort
+        strategies.push(Box::new(PathScanDiscovery::new()));
+        
+        strategies.sort_by_key(|s| std::cmp::Reverse(s.priority()));
+        
+        Self { strategies }
+    }
+    
+    pub async fn discover_all(&self) -> Vec<ToolManifest> {
+        for strategy in &self.strategies {
+            match strategy.discover().await {
+                Ok(tools) if !tools.is_empty() => {
+                    tracing::info!("Discovered {} tools using {}", tools.len(), strategy.name());
+                    return tools;
+                }
+                Err(e) => {
+                    tracing::warn!("Discovery strategy {} failed: {}", strategy.name(), e);
+                }
+                _ => continue,
+            }
+        }
+        
+        Vec::new()
+    }
+}
+
+// Filesystem watcher using notify
+struct FsWatcherDiscovery {
+    watcher: Arc<Mutex<RecommendedWatcher>>,
+    known_tools: Arc<RwLock<HashMap<PathBuf, ToolManifest>>>,
+}
+
+impl FsWatcherDiscovery {
+    fn new() -> Self {
+        let known_tools = Arc::new(RwLock::new(HashMap::new()));
+        let known_tools_clone = known_tools.clone();
+        
+        let (tx, rx) = channel();
+        let watcher = notify::watcher(tx, Duration::from_secs(2)).unwrap();
+        
+        // Watch common tool directories
+        for dir in &["/usr/local/bin", "~/.local/bin", "~/.cargo/bin"] {
+            if let Ok(path) = shellexpand::full(dir) {
+                let _ = watcher.watch(Path::new(path.as_ref()), RecursiveMode::NonRecursive);
+            }
+        }
+        
+        // Background task to process events
+        tokio::spawn(async move {
+            while let Ok(event) = rx.recv() {
+                if let DebouncedEvent::Create(path) | DebouncedEvent::Write(path) = event {
+                    if let Ok(manifest) = probe_tool_manifest(&path).await {
+                        known_tools_clone.write().await.insert(path, manifest);
+                    }
+                }
+            }
+        });
+        
+        Self {
+            watcher: Arc::new(Mutex::new(watcher)),
+            known_tools,
+        }
+    }
+}
+```
+
+## Cross-Platform Security Model
+
+Abstract security primitives across platforms:
+
+```rust
+// src/security/mod.rs
+pub trait SecuritySandbox: Send + Sync {
+    fn apply_restrictions(&self, policy: &SecurityPolicy) -> Result<()>;
+    fn verify_manifest(&self, manifest: &[u8], signature: &[u8]) -> Result<()>;
+}
+
+#[cfg(target_os = "linux")]
+pub type PlatformSandbox = LinuxSandbox;
+
+#[cfg(target_os = "macos")]
+pub type PlatformSandbox = MacOsSandbox;
+
+#[cfg(target_os = "windows")]
+pub type PlatformSandbox = WindowsSandbox;
+
+// Linux implementation with Landlock
+#[cfg(target_os = "linux")]
+struct LinuxSandbox {
+    landlock: landlock::Ruleset,
+    seccomp: seccomp::Filter,
+}
+
+#[cfg(target_os = "linux")]
+impl SecuritySandbox for LinuxSandbox {
+    fn apply_restrictions(&self, policy: &SecurityPolicy) -> Result<()> {
+        // Apply Landlock rules
+        let mut ruleset = self.landlock.create()?;
+        
+        for path in &policy.allowed_reads {
+            ruleset = ruleset.add_rule(landlock::PathBeneath::new(
+                path,
+                landlock::AccessFs::ReadFile | landlock::AccessFs::ReadDir,
+            ))?;
+        }
+        
+        ruleset.restrict_self()?;
+        
+        // Apply seccomp filters
+        self.seccomp.load()?;
+        
+        Ok(())
+    }
+}
+
+// macOS implementation with App Sandbox
+#[cfg(target_os = "macos")]
+struct MacOsSandbox {
+    entitlements: sandbox::Entitlements,
+}
+
+#[cfg(target_os = "macos")]
+impl SecuritySandbox for MacOsSandbox {
+    fn apply_restrictions(&self, policy: &SecurityPolicy) -> Result<()> {
+        use sandbox_mac::*;
+        
+        let mut profile = Profile::new("pcode-tool");
+        
+        // File access
+        for path in &policy.allowed_reads {
+            profile.allow_file_read(path);
+        }
+        
+        for path in &policy.allowed_writes {
+            profile.allow_file_write(path);
+        }
+        
+        // Network (with domain restrictions)
+        if policy.network_access.is_some() {
+            for domain in &policy.network_access.allowed_domains {
+                profile.allow_network_outbound(domain);
+            }
+        }
+        
+        profile.apply()?;
+        Ok(())
+    }
+}
+
+// Windows implementation with AppContainer
+#[cfg(target_os = "windows")]
+struct WindowsSandbox {
+    container: appcontainer::AppContainer,
+}
+
+#[cfg(target_os = "windows")]
+impl SecuritySandbox for WindowsSandbox {
+    fn apply_restrictions(&self, policy: &SecurityPolicy) -> Result<()> {
+        use windows::Win32::Security::*;
+        
+        let mut container = appcontainer::AppContainer::new("pcode-tool")?;
+        
+        // Set capabilities
+        if policy.network_access.is_some() {
+            container.add_capability(WinCapabilityNetworkClient);
+        }
+        
+        // File system restrictions via explicit ACLs
+        for path in &policy.allowed_reads {
+            container.add_filesystem_rule(path, FILE_GENERIC_READ)?;
+        }
+        
+        container.apply_to_current_process()?;
+        Ok(())
+    }
+}
+```
+
+## Enhanced Security Policy
+
+Fine-grained network control:
+
+```rust
+// src/security/policy.rs
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SecurityPolicy {
+    pub allowed_reads: Vec<PathBuf>,
+    pub allowed_writes: Vec<PathBuf>,
+    pub allowed_creates: Vec<PathBuf>,
+    pub network_access: Option<NetworkPolicy>,
+    pub resource_limits: ResourceLimits,
+    pub capabilities: ToolCapabilities,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NetworkPolicy {
+    pub allowed_domains: Vec<String>,
+    pub allowed_ports: Vec<u16>,
+    pub allowed_protocols: Vec<Protocol>,
+    pub dns_servers: Option<Vec<IpAddr>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Protocol {
+    Tcp,
+    Udp,
+    Http,
+    Https,
+}
+
+// DNS-based egress control
+pub struct NetworkEnforcer {
+    resolver: trust_dns_resolver::AsyncResolver,
+    allowed_ips: Arc<RwLock<HashSet<IpAddr>>>,
+}
+
+impl NetworkEnforcer {
+    pub async fn resolve_allowed_domains(&self, domains: &[String]) -> Result<()> {
+        let mut allowed = HashSet::new();
+        
+        for domain in domains {
+            let response = self.resolver.lookup_ip(domain).await?;
+            for ip in response {
+                allowed.insert(ip);
+            }
+        }
+        
+        *self.allowed_ips.write().await = allowed;
+        Ok(())
+    }
+    
+    pub async fn check_connection(&self, addr: &SocketAddr) -> bool {
+        self.allowed_ips.read().await.contains(&addr.ip())
+    }
+}
+```
+
+## MCP Protocol Evolution
+
+Support for streaming and manifest verification:
+
+```capnp
+# mcp-v2.capnp
+@0xdeadbeef12345678;
+
+struct ToolManifest {
+    name @0 :Text;
+    version @1 :Version;
+    capabilities @2 :List(Capability);
+    inputSchema @3 :Data;
+    outputSchema @4 :Data;
+    
+    # New: cryptographic identity
+    publicKey @5 :Data;  # Ed25519 public key
+    signature @6 :Data;  # Self-signature of fields 0-4
+    
+    # New: streaming support
+    streamingSupport @7 :StreamingMode;
+}
+
+enum StreamingMode {
+    none @0;
+    input @1;    # Tool accepts streaming input
+    output @2;   # Tool produces streaming output
+    both @3;     # Full duplex streaming
+}
+
+# Streaming protocol
+struct StreamRequest {
+    id @0 :UInt64;
+    sequence @1 :UInt32;  # For ordering
+    data @2 :Data;
+    isLast @3 :Bool;
+}
+
+struct StreamResponse {
+    id @0 :UInt64;
+    sequence @1 :UInt32;
+    data @2 :Data;
+    isLast @3 :Bool;
+    error @4 :Text;  # Optional error
+}
+```
+
+Manifest verification:
+
+```rust
+// src/mcp/trust.rs
+use ed25519_dalek::{PublicKey, Signature, Verifier};
+
+pub struct TrustManager {
+    trusted_keys: HashMap<String, PublicKey>,
+}
+
+impl TrustManager {
+    pub fn verify_manifest(&self, manifest: &ToolManifest) -> Result<bool> {
+        // Extract the public key
+        let public_key = PublicKey::from_bytes(&manifest.public_key)?;
+        
+        // Reconstruct the signed portion
+        let mut signed_data = Vec::new();
+        signed_data.extend_from_slice(manifest.name.as_bytes());
+        signed_data.extend_from_slice(&manifest.version.to_bytes());
+        // ... other fields
+        
+        // Verify signature
+        let signature = Signature::from_bytes(&manifest.signature)?;
+        Ok(public_key.verify(&signed_data, &signature).is_ok())
+    }
+}
+```
+
+## Secure Build Pipeline
+
+Hardware security module integration:
+
+```rust
+// ci/sign.rs
+use rusoto_kms::{KmsClient, SignRequest};
+
+async fn sign_binary(binary_path: &Path) -> Result<Vec<u8>> {
+    // Read and hash the binary
+    let binary_data = tokio::fs::read(binary_path).await?;
+    let hash = blake3::hash(&binary_data);
+    
+    // Use AWS KMS for signing (key never leaves HSM)
+    let client = KmsClient::new(Default::default());
+    
+    let sign_request = SignRequest {
+        key_id: env::var("PCODE_KMS_KEY_ID")?,
+        message: hash.as_bytes().to_vec().into(),
+        message_type: Some("DIGEST".to_string()),
+        signing_algorithm: "ECDSA_SHA_256".to_string(),
+        ..Default::default()
+    };
+    
+    let response = client.sign(sign_request).await?;
+    Ok(response.signature.unwrap().to_vec())
+}
+```
+
+## Performance Validation Framework
+
+Automated benchmark enforcement:
+
+```rust
+// benches/latency.rs
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+
+fn bench_first_token_latency(c: &mut Criterion) {
+    let runtime = pcode::UnifiedRuntime::new().unwrap();
+    
+    let mut group = c.benchmark_group("first_token_latency");
+    
+    for scenario in &["simple_prompt", "with_tool_call", "max_context"] {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(scenario),
+            scenario,
+            |b, scenario| {
+                b.to_async(&runtime.rt).iter(|| async {
+                    let prompt = load_test_prompt(scenario);
+                    let start = std::time::Instant::now();
+                    
+                    let mut stream = runtime.process_prompt(prompt).await;
+                    let _first_chunk = stream.next().await.unwrap();
+                    
+                    start.elapsed()
+                });
+            },
+        );
+    }
+    
+    group.finish();
+}
+
+// Enforce performance regression
+#[test]
+fn test_performance_targets() {
+    let results = run_benchmarks();
+    
+    assert!(results.first_token_p50 < Duration::from_millis(150));
+    assert!(results.first_token_p99 < Duration::from_millis(250));
+    assert!(results.tool_discovery_p99 < Duration::from_millis(50));
+}
+```
+
+## Binary Size Optimization
+
+Achieve <12MB target through aggressive optimization:
 
 ```toml
-# ~/.config/pcode/config.toml
-provider = "google"
-model = "gemini-1.5-pro-latest"
+# Cargo.toml
+[profile.release]
+opt-level = "z"          # Optimize for size
+lto = true               # Link-time optimization
+codegen-units = 1        # Single codegen unit
+strip = true             # Strip symbols
+panic = "abort"          # No unwinding
 
-[providers.google]
-api_key = "AIzaSy..."
+[dependencies]
+# Use lite versions where possible
+tokio = { version = "1.35", default-features = false, features = ["rt-multi-thread", "net", "time"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+# Avoid heavy dependencies
+# NO: ort, ndarray, tensorflow
 
-[providers.ollama]
-host = "http://localhost:11434"
-# model is set via `pcode config set model ...`
+[build-dependencies]
+# Generate lookup tables at compile time
+phf_codegen = "0.11"
 ```
 
-##  कमांड CLI Command Reference
-
-### `pcode [PROMPT]`
-The main command. Starts an interactive session or runs a one-off prompt.
+Post-build optimization:
 
 ```bash
-# Interactive mode
-pcode
+#!/bin/bash
+# scripts/optimize-binary.sh
 
-# One-off question
-pcode "Refactor this function to be more idiomatic Rust: `...`"
+# Build with musl for static linking
+cargo build --release --target x86_64-unknown-linux-musl
+
+# Strip all symbols
+strip -s target/x86_64-unknown-linux-musl/release/pcode
+
+# Compress with UPX (lossless)
+upx --ultra-brute --best target/x86_64-unknown-linux-musl/release/pcode
+
+# Verify size
+SIZE=$(stat -f%z target/x86_64-unknown-linux-musl/release/pcode)
+if [ $SIZE -gt 12582912 ]; then  # 12MB in bytes
+    echo "ERROR: Binary size ${SIZE} exceeds 12MB limit"
+    exit 1
+fi
 ```
 
-### `pcode config`
-Manage LLM provider configuration.
+## Final Architecture Summary
 
-```bash
-pcode config set <KEY> <VALUE>  # Set a config key (e.g., provider, model, api_key)
-pcode config get                # Display the current configuration
-pcode config list-providers     # Show available built-in providers
-```
+This specification delivers a production-grade AI code agent that:
 
-### `pcode tool`
-Manage MCP tools. `pmat` is discovered automatically.
+1. **Simplifies complexity** through a unified runtime while maintaining performance
+2. **Eliminates external dependencies** for token counting with a compact lookup table
+3. **Provides robust cross-platform security** with platform-native sandboxing
+4. **Ensures reliability** through multiple fallback strategies for every component
+5. **Achieves aggressive performance targets** validated through automated benchmarking
 
-```bash
-pcode tool list                 # List all commands `pcode` can use
-pcode tool add <name> <path>    # Register a new custom CLI tool
-pcode tool refresh pmat         # Force a re-scan of pmat's capabilities
-```
-
-## 🛠️ Development & Project Structure
-
-The project will strictly follow Rust best practices and a Makefile-driven workflow for consistency and quality, just like `pmat`.
-
--   **`src/`**: All Rust source code.
-    -   `main.rs`: Entry point.
-    -   `cli.rs`: Command-line interface definition.
-    -   `config.rs`: Configuration management.
-    -   `agent/`: The core agent logic.
-    -   `providers/`: Modules for each LLM provider (Ollama, Google, etc.).
-    -   `mcp/`: Logic for discovering and interacting with tools like `pmat`.
--   **`scripts/`**: Installation and helper scripts.
--   **`Makefile`**: The central hub for all development tasks.
-
-### Makefile Targets
-
-```makefile
-# Build a small, optimized, static binary
-build-release:
-	cargo build --release --locked
-
-# Run all tests and lints
-test-all: lint test-unit test-integration
-
-# Run fast unit tests
-test-unit:
-	cargo test --lib --locked
-
-# Run integration tests
-test-integration:
-	cargo test --test '*' --locked
-
-# Lint with clippy and check formatting
-lint:
-	cargo clippy --all-targets -- -D warnings
-	cargo fmt --all -- --check
-
-# Install the binary locally for testing
-install:
-	cargo install --path . --force
-
-# Create a distributable release artifact
-dist:
-	# Commands to package the binary for distribution
-```
-
-## 🤝 Contributing
-
-1.  Fork the repository.
-2.  Create a feature branch (`git checkout -b feature/add-new-provider`).
-3.  Make your changes.
-4.  Run `make test-all` to ensure quality.
-5.  Submit a pull request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the `LICENSE` file for details.
-
----
-
-**Built with ❤️ by [Pragmatic AI Labs](https://paiml.com)**
+The implementation represents approximately 25,000 hours of engineering effort, targeting Q4 2024 release.
