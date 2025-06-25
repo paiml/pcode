@@ -271,12 +271,67 @@ Contributions are welcome! Please ensure:
 
 ## 🏗️ Roadmap
 
-- [ ] Reach 80% test coverage
-- [ ] Implement full AI Studio API integration
-- [ ] Add more MCP tools (git, search, etc.)
-- [ ] Create VSCode/Neovim extensions
-- [ ] Build GitHub Actions integration
-- [ ] Optimize binary size to <10MB
+### 🎯 Next Milestone: Code Execution & PMAT Integration
+
+The current limitation is that pcode cannot actually execute code, which significantly limits its usefulness as an AI code agent. The next critical milestone is to add code execution capabilities.
+
+#### Phase 1: PMAT Integration via MCP (Priority 1)
+- [ ] Implement MCP tool for PMAT (Pragmatic Metrics for Agile Teams) execution
+- [ ] Add sandboxed Python code execution for analysis scripts
+- [ ] Integrate complexity analysis (cyclomatic complexity ≤ 20)
+- [ ] Add test coverage analysis capabilities
+- [ ] Implement technical debt detection (SATD)
+- [ ] Add test dependency graph (TDG) analysis
+
+#### Phase 2: General Code Execution (Priority 2)
+- [ ] Implement sandboxed code execution for multiple languages:
+  - [ ] Python (via embedded interpreter or subprocess)
+  - [ ] JavaScript/TypeScript (via Deno)
+  - [ ] Rust (via cargo)
+  - [ ] Shell scripts (carefully sandboxed)
+- [ ] Add code compilation and build support
+- [ ] Implement test runner integration
+- [ ] Add debugging capabilities
+
+#### Phase 3: Enhanced Development Tools
+- [ ] Git integration for version control operations
+- [ ] Code search and refactoring tools
+- [ ] Dependency management (npm, cargo, pip)
+- [ ] Linting and formatting integration
+- [ ] Documentation generation
+
+#### Phase 4: Platform Integration
+- [ ] VSCode extension with full MCP support
+- [ ] Neovim plugin
+- [ ] GitHub Actions integration
+- [ ] CI/CD pipeline support
+
+### 🔧 Technical Requirements for Code Execution
+
+1. **Security**: All code execution must be sandboxed using:
+   - Linux: Landlock + namespaces + cgroups
+   - macOS: Sandbox profiles + App Sandbox
+   - Windows: AppContainer + Job Objects
+
+2. **Resource Limits**:
+   - Memory: Configurable limits (default 512MB)
+   - CPU: Time limits for execution
+   - Disk: Temporary workspace with quota
+   - Network: Disabled by default
+
+3. **Supported Operations**:
+   - Run code analysis tools
+   - Execute tests
+   - Build projects
+   - Run linters and formatters
+   - Generate metrics and reports
+
+### 📈 Success Metrics
+
+- Code execution adds <100ms latency
+- Binary size remains under 15MB
+- 100% sandboxed execution (no escapes)
+- Support for 80% of common development tasks
 
 ## 📝 License
 
