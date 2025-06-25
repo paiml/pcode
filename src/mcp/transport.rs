@@ -78,8 +78,13 @@ mod tests {
     
     #[test]
     fn test_transport_protocol_handler() {
-        let transport = StdioTransport::new();
+        let _transport = StdioTransport::new();
         // Verify it has a protocol handler
         assert!(true); // Can't access private field, but construction succeeds
     }
 }
+
+// Import test module
+#[cfg(test)]
+#[path = "transport_tests.rs"]
+mod transport_tests;
