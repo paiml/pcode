@@ -10,6 +10,7 @@ use pcode::{
         bash::BashTool,
         dev_cli::DevCliTool,
         file::{FileReadTool, FileWriteTool},
+        fix::FixTool,
         llm::{LlmTool, TokenEstimateTool},
         pmat::PmatTool,
         process::ProcessTool,
@@ -70,103 +71,129 @@ fn main() -> Result<()> {
     runtime.block_on(async_main(args))
 }
 
-async fn execute_single_command(registry: ToolRegistry, command: &str) -> Result<()> {
-    use pcode::tools::ToolRequest;
+fn parse_tool_params(tool_name: &str, params_str: &str) -> Result<serde_json::Value> {
     use serde_json::json;
-    
-    // Parse command - check if it's a tool command
-    if command.starts_with('/') {
-        let parts: Vec<&str> = command[1..].splitn(2, ' ').collect();
+
+    match tool_name {
+        "file_read" => Ok(json!({ "path": params_str })),
+        "file_write" => {
+            let parts: Vec<&str> = params_str.splitn(2, ' ').collect();
+            if parts.len() == 2 {
+                Ok(json!({ "path": parts[0], "content": parts[1] }))
+            } else {
+                anyhow::bail!("Usage: /file_write <path> <content>");
+            }
+        }
+        "process" => {
+            let parts: Vec<&str> = params_str.split_whitespace().collect();
+            if parts.is_empty() {
+                anyhow::bail!("Usage: /process <command> [args...]");
+            }
+            Ok(json!({
+                "command": parts[0],
+                "args": if parts.len() > 1 { Some(parts[1..].to_vec()) } else { None }
+            }))
+        }
+        "llm" => Ok(json!({ "prompt": params_str })),
+        "token_estimate" => Ok(json!({ "text": params_str })),
+        "pmat" => {
+            let parts: Vec<&str> = params_str.split_whitespace().collect();
+            if parts.len() < 2 {
+                anyhow::bail!("Usage: /pmat <command> <path>");
+            }
+            Ok(json!({ "command": parts[0], "path": parts[1] }))
+        }
+        "bash" => Ok(json!({ "command": params_str })),
+        "dev_cli" => {
+            let parts: Vec<&str> = params_str.split_whitespace().collect();
+            if parts.is_empty() {
+                anyhow::bail!("Usage: /dev_cli <tool> [args...]");
+            }
+            Ok(json!({ "tool": parts[0], "args": parts[1..].to_vec() }))
+        }
+        "fix" => {
+            let parts: Vec<&str> = params_str.split_whitespace().collect();
+            if parts.len() < 2 {
+                anyhow::bail!("Usage: /fix <type> <path> [--dry-run]");
+            }
+            let dry_run = parts.get(2).is_some_and(|&s| s == "--dry-run");
+            Ok(json!({
+                "fix_type": parts[0],
+                "path": parts[1],
+                "dry_run": dry_run
+            }))
+        }
+        _ => anyhow::bail!("Unknown tool: {}", tool_name),
+    }
+}
+
+fn format_tool_result(tool_name: &str, result: &serde_json::Value) -> Result<String> {
+    if tool_name == "llm" {
+        if let Some(text) = result.get("response").and_then(|v| v.as_str()) {
+            return Ok(text.to_string());
+        }
+    }
+    serde_json::to_string_pretty(result).map_err(Into::into)
+}
+
+async fn execute_tool_command(
+    registry: ToolRegistry,
+    tool_name: &str,
+    params: serde_json::Value,
+) -> Result<()> {
+    use pcode::tools::ToolRequest;
+
+    let request = ToolRequest {
+        tool: tool_name.to_string(),
+        params,
+    };
+
+    let response = registry.execute(request).await;
+
+    if !response.success {
+        let error_msg = response
+            .error
+            .unwrap_or_else(|| "Unknown error".to_string());
+        anyhow::bail!("Error: {}", error_msg);
+    }
+
+    if let Some(result) = response.result {
+        let formatted = format_tool_result(tool_name, &result)?;
+        println!("{}", formatted);
+    }
+
+    Ok(())
+}
+
+async fn execute_single_command(registry: ToolRegistry, command: &str) -> Result<()> {
+    use serde_json::json;
+
+    if let Some(stripped) = command.strip_prefix('/') {
+        // Parse tool command
+        let parts: Vec<&str> = stripped.splitn(2, ' ').collect();
         if parts.is_empty() {
             anyhow::bail!("Invalid command");
         }
 
         let tool_name = parts[0];
         let params_str = parts.get(1).unwrap_or(&"{}");
+        let params = parse_tool_params(tool_name, params_str)?;
 
-        // Parse parameters based on tool
-        let params = match tool_name {
-            "file_read" => json!({ "path": params_str }),
-            "file_write" => {
-                let parts: Vec<&str> = params_str.splitn(2, ' ').collect();
-                if parts.len() == 2 {
-                    json!({ "path": parts[0], "content": parts[1] })
-                } else {
-                    anyhow::bail!("Usage: /file_write <path> <content>");
-                }
-            }
-            "process" => {
-                let parts: Vec<&str> = params_str.split_whitespace().collect();
-                if parts.is_empty() {
-                    anyhow::bail!("Usage: /process <command> [args...]");
-                }
-                json!({ "command": parts[0], "args": if parts.len() > 1 { Some(parts[1..].to_vec()) } else { None } })
-            }
-            "llm" => json!({ "prompt": params_str }),
-            "token_estimate" => json!({ "text": params_str }),
-            "pmat" => {
-                let parts: Vec<&str> = params_str.split_whitespace().collect();
-                if parts.len() < 2 {
-                    anyhow::bail!("Usage: /pmat <command> <path>");
-                }
-                json!({ "command": parts[0], "path": parts[1] })
-            }
-            "bash" => json!({ "command": params_str }),
-            "dev_cli" => {
-                let parts: Vec<&str> = params_str.split_whitespace().collect();
-                if parts.is_empty() {
-                    anyhow::bail!("Usage: /dev_cli <tool> [args...]");
-                }
-                json!({ "tool": parts[0], "args": parts[1..].to_vec() })
-            }
-            _ => {
-                anyhow::bail!("Unknown tool: {}", tool_name);
-            }
-        };
-
-        // Execute tool
-        let request = ToolRequest {
-            tool: tool_name.to_string(),
-            params,
-        };
-
-        let response = registry.execute(request).await;
-
-        if response.success {
-            if let Some(result) = response.result {
-                println!("{}", serde_json::to_string_pretty(&result)?);
-            }
-        } else {
-            anyhow::bail!("Error: {}", response.error.unwrap_or_else(|| "Unknown error".to_string()));
-        }
+        execute_tool_command(registry, tool_name, params).await
     } else {
         // Natural language command - use LLM if available
         let config = Config::from_env();
         if config.has_api_key() {
-            let request = ToolRequest {
-                tool: "llm".to_string(),
-                params: json!({
-                    "prompt": command,
-                    "max_tokens": 800
-                }),
-            };
-
-            let response = registry.execute(request).await;
-            if response.success {
-                if let Some(result) = response.result {
-                    if let Some(text) = result.get("response").and_then(|v| v.as_str()) {
-                        println!("{}", text);
-                    }
-                }
-            } else {
-                anyhow::bail!("LLM error: {}", response.error.unwrap_or_else(|| "Unknown error".to_string()));
-            }
+            let params = json!({
+                "prompt": command,
+                "max_tokens": 800
+            });
+            execute_tool_command(registry, "llm", params).await
         } else {
             println!("No AI Studio API key found. Use tool commands starting with '/' or set AI_STUDIO_API_KEY.");
+            Ok(())
         }
     }
-    
-    Ok(())
 }
 
 async fn async_main(args: Args) -> Result<()> {
@@ -202,6 +229,7 @@ async fn async_main(args: Args) -> Result<()> {
     registry.register(Box::new(PmatTool::new()));
     registry.register(Box::new(BashTool::new()));
     registry.register(Box::new(DevCliTool::new()));
+    registry.register(Box::new(FixTool::new()));
 
     info!("Registered {} tools", registry.list_tools().len());
 

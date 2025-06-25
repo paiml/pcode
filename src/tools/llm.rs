@@ -185,7 +185,11 @@ mod tests {
             }
             Err(ToolError::Execution(msg)) => {
                 // If no API key, verify error message
-                assert!(msg.contains("AI_STUDIO_API_KEY not set"), "Expected error about API key, got: {}", msg);
+                assert!(
+                    msg.contains("AI_STUDIO_API_KEY not set"),
+                    "Expected error about API key, got: {}",
+                    msg
+                );
             }
             Err(e) => panic!("Unexpected error: {:?}", e),
         }

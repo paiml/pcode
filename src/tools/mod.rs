@@ -1,6 +1,7 @@
 pub mod bash;
 pub mod dev_cli;
 pub mod file;
+pub mod fix;
 pub mod llm;
 pub mod pmat;
 pub mod process;

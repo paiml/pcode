@@ -67,8 +67,8 @@ impl Tool for DevCliTool {
     }
 
     async fn execute(&self, params: Value) -> Result<Value, ToolError> {
-        let params: DevCliParams = serde_json::from_value(params)
-            .map_err(|e| ToolError::InvalidParams(e.to_string()))?;
+        let params: DevCliParams =
+            serde_json::from_value(params).map_err(|e| ToolError::InvalidParams(e.to_string()))?;
 
         let (tool_binary, default_args) = self.get_tool_config(&params.tool)?;
 
@@ -89,12 +89,12 @@ impl Tool for DevCliTool {
 
         // Build command
         let mut cmd = Command::new(tool_binary);
-        
+
         // Add default args first
         for arg in default_args {
             cmd.arg(arg);
         }
-        
+
         // Add user args
         for arg in &params.args {
             cmd.arg(arg);
@@ -115,7 +115,7 @@ impl Tool for DevCliTool {
                 // Parse tool-specific output
                 let parsed_output = match params.tool.as_str() {
                     "rg" | "ripgrep" => self.parse_ripgrep_output(&stdout),
-                    "cargo" if params.args.get(0).map(|s| s.as_str()) == Some("clippy") => {
+                    "cargo" if params.args.first().map(|s| s.as_str()) == Some("clippy") => {
                         self.parse_clippy_output(&stderr)
                     }
                     _ => None,
@@ -140,7 +140,7 @@ impl Tool for DevCliTool {
 impl DevCliTool {
     fn parse_ripgrep_output(&self, output: &str) -> Option<Value> {
         let mut matches = Vec::new();
-        
+
         for line in output.lines() {
             if let Some((file_line, content)) = line.split_once(':') {
                 if let Some((file, line_num)) = file_line.rsplit_once(':') {
@@ -163,26 +163,39 @@ impl DevCliTool {
         }
     }
 
+    fn parse_warning_line(&self, line: &str) -> Option<(String, String)> {
+        if line.starts_with("warning:") || line.starts_with("error:") {
+            if let Some((level, rest)) = line.split_once(':') {
+                if let Some(msg) = rest.strip_prefix(' ') {
+                    return Some((level.to_string(), msg.to_string()));
+                }
+            }
+        }
+        None
+    }
+
+    fn extract_location(&self, line: &str) -> Option<String> {
+        if line.contains("-->") {
+            line.split("-->").nth(1).map(|loc| loc.trim().to_string())
+        } else {
+            None
+        }
+    }
+
     fn parse_clippy_output(&self, output: &str) -> Option<Value> {
         let mut warnings = Vec::new();
-        let mut current_warning: Option<(String, String, String)> = None;
+        let mut current_warning: Option<(String, String)> = None;
 
         for line in output.lines() {
-            if line.starts_with("warning:") || line.starts_with("error:") {
-                if let Some((level, rest)) = line.split_once(':') {
-                    if let Some(msg) = rest.strip_prefix(' ') {
-                        current_warning = Some((level.to_string(), msg.to_string(), String::new()));
-                    }
-                }
-            } else if line.contains("-->") && current_warning.is_some() {
-                if let Some((level, msg, _)) = current_warning.take() {
-                    if let Some(location) = line.split("-->").nth(1) {
-                        warnings.push(serde_json::json!({
-                            "level": level,
-                            "message": msg,
-                            "location": location.trim(),
-                        }));
-                    }
+            if let Some(warning) = self.parse_warning_line(line) {
+                current_warning = Some(warning);
+            } else if let Some(location) = self.extract_location(line) {
+                if let Some((level, msg)) = current_warning.take() {
+                    warnings.push(serde_json::json!({
+                        "level": level,
+                        "message": msg,
+                        "location": location,
+                    }));
                 }
             }
         }
@@ -205,7 +218,7 @@ mod tests {
     #[test]
     fn test_tool_config() {
         let tool = DevCliTool::new();
-        
+
         assert!(tool.get_tool_config("rg").is_ok());
         assert!(tool.get_tool_config("cargo").is_ok());
         assert!(tool.get_tool_config("unknown").is_err());
@@ -214,13 +227,13 @@ mod tests {
     #[tokio::test]
     async fn test_dev_cli_echo() {
         let tool = DevCliTool::new();
-        
+
         // Most systems should have echo
         let params = serde_json::json!({
             "tool": "echo",
             "args": ["Hello"]
         });
-        
+
         // This will fail because echo is not in the allowed list
         let result = tool.execute(params).await;
         assert!(result.is_err());

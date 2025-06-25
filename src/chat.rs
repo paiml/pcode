@@ -1,7 +1,7 @@
 use crate::{
     config::Config,
     context::{PROJECT_CONTEXT, SYSTEM_PROMPT},
-    tools::{ToolRegistry, ToolRequest},
+    tools::{ToolRegistry, ToolRequest, ToolResponse},
 };
 use anyhow::Result;
 use rustyline::error::ReadlineError;
@@ -95,6 +95,63 @@ impl InteractiveChat {
         Ok(())
     }
 
+    async fn build_enhanced_prompt(&self, input: &str) -> String {
+        if input.to_lowercase().contains("readme") {
+            // Read README.md and include it in context
+            let readme_content = match self.read_file("README.md").await {
+                Ok(content) => format!("\n\nREADME.md content:\n{}", content),
+                Err(_) => String::new(),
+            };
+            format!(
+                "{}\n\nContext:\n{}{}\n\nUser: {}\n\nAssistant:",
+                SYSTEM_PROMPT, PROJECT_CONTEXT, readme_content, input
+            )
+        } else {
+            format!(
+                "{}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
+                SYSTEM_PROMPT, PROJECT_CONTEXT, input
+            )
+        }
+    }
+
+    fn print_llm_response(&self, response: ToolResponse) -> Result<()> {
+        if response.success {
+            if let Some(result) = response.result {
+                if let Some(text) = result.get("response").and_then(|v| v.as_str()) {
+                    println!("{}", text);
+                } else {
+                    println!("🤖 {}", serde_json::to_string_pretty(&result)?);
+                }
+            } else {
+                println!("💭 No response from LLM");
+            }
+        } else {
+            println!(
+                "❌ Error: {}",
+                response
+                    .error
+                    .unwrap_or_else(|| "Failed to process with LLM".to_string())
+            );
+        }
+        Ok(())
+    }
+
+    async fn process_with_llm(&self, input: &str) -> Result<()> {
+        let enhanced_prompt = self.build_enhanced_prompt(input).await;
+
+        let request = ToolRequest {
+            tool: "llm".to_string(),
+            params: json!({
+                "prompt": enhanced_prompt,
+                "max_tokens": 800,
+                "temperature": 0.7
+            }),
+        };
+
+        let response = self.registry.execute(request).await;
+        self.print_llm_response(response)
+    }
+
     async fn process_input(&self, input: &str) -> Result<()> {
         // Check if this is a direct tool command
         if input.starts_with('/') {
@@ -103,168 +160,145 @@ impl InteractiveChat {
 
         // Process natural language input with LLM if available
         if self.config.has_api_key() {
-            // Check if user is asking about specific files
-            let enhanced_prompt = if input.to_lowercase().contains("readme") {
-                // Read README.md and include it in context
-                let readme_content = match self.read_file("README.md").await {
-                    Ok(content) => format!("\n\nREADME.md content:\n{}", content),
-                    Err(_) => String::new(),
-                };
-                format!(
-                    "{}\n\nContext:\n{}{}\n\nUser: {}\n\nAssistant:",
-                    SYSTEM_PROMPT, PROJECT_CONTEXT, readme_content, input
-                )
-            } else {
-                format!(
-                    "{}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
-                    SYSTEM_PROMPT, PROJECT_CONTEXT, input
-                )
-            };
-
-            // Use the LLM tool to process the input
-            let request = ToolRequest {
-                tool: "llm".to_string(),
-                params: json!({
-                    "prompt": enhanced_prompt,
-                    "max_tokens": 800,
-                    "temperature": 0.7
-                }),
-            };
-
-            let response = self.registry.execute(request).await;
-
-            if response.success {
-                if let Some(result) = response.result {
-                    if let Some(text) = result.get("response").and_then(|v| v.as_str()) {
-                        println!("{}", text);
-                    } else {
-                        println!("🤖 {}", serde_json::to_string_pretty(&result)?);
-                    }
-                } else {
-                    println!("💭 No response from LLM");
-                }
-            } else {
-                println!(
-                    "❌ Error: {}",
-                    response
-                        .error
-                        .unwrap_or_else(|| "Failed to process with LLM".to_string())
-                );
-            }
+            self.process_with_llm(input).await
         } else {
             // Provide helpful responses without LLM
-            self.handle_offline_query(input)?;
+            self.handle_offline_query(input)
         }
+    }
 
-        Ok(())
+    fn show_about_info(&self) {
+        println!("🤖 pcode is a production-grade AI code agent with extreme performance and security requirements.\n");
+        println!("Key features:");
+        println!("• Interactive chat interface for AI-assisted coding");
+        println!(
+            "• Security sandboxing (Landlock on Linux, platform-specific on macOS/Windows)"
+        );
+        println!("• Tool system for file operations, process execution, and more");
+        println!("• Token estimation with perfect hash tables");
+        println!("• Extreme performance: <200ms latency, <12MB binary size");
+        println!("\nSet AI_STUDIO_API_KEY environment variable to enable AI features.");
+    }
+
+    fn show_no_api_key_message(&self) {
+        println!(
+            "ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable AI responses."
+        );
+        println!("   Type 'help' for available commands or 'tools' to see available tools.");
+    }
+
+    fn is_about_query(&self, input: &str) -> bool {
+        let input_lower = input.to_lowercase();
+        input_lower.contains("about")
+            && (input_lower.contains("project") || input_lower.contains("pcode"))
     }
 
     fn handle_offline_query(&self, input: &str) -> Result<()> {
         let input_lower = input.to_lowercase();
 
-        // Provide intelligent responses for common queries without LLM
-        if input_lower.contains("about")
-            && (input_lower.contains("project") || input_lower.contains("pcode"))
-        {
-            println!("🤖 pcode is a production-grade AI code agent with extreme performance and security requirements.\n");
-            println!("Key features:");
-            println!("• Interactive chat interface for AI-assisted coding");
-            println!(
-                "• Security sandboxing (Landlock on Linux, platform-specific on macOS/Windows)"
-            );
-            println!("• Tool system for file operations, process execution, and more");
-            println!("• Token estimation with perfect hash tables");
-            println!("• Extreme performance: <200ms latency, <12MB binary size");
-            println!("\nSet AI_STUDIO_API_KEY environment variable to enable AI features.");
+        if self.is_about_query(input) {
+            self.show_about_info();
         } else if input_lower.contains("help") {
             self.show_help();
         } else if input_lower.contains("tool") {
             self.list_tools();
         } else {
-            println!(
-                "ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable AI responses."
-            );
-            println!("   Type 'help' for available commands or 'tools' to see available tools.");
+            self.show_no_api_key_message();
         }
 
         Ok(())
     }
 
-    async fn execute_tool_command(&self, input: &str) -> Result<()> {
-        let parts: Vec<&str> = input[1..].splitn(2, ' ').collect();
-        if parts.is_empty() {
-            println!("❌ Invalid command");
-            return Ok(());
-        }
-
-        let tool_name = parts[0];
-        let params_str = parts.get(1).unwrap_or(&"{}");
-
-        // Parse parameters
-        let params = if params_str.starts_with('{') {
-            // JSON parameters
-            serde_json::from_str(params_str)?
+    fn parse_file_write_params(&self, params_str: &str) -> Option<serde_json::Value> {
+        let parts: Vec<&str> = params_str.splitn(2, ' ').collect();
+        if parts.len() == 2 {
+            Some(json!({ "path": parts[0], "content": parts[1] }))
         } else {
-            // Simple parameter handling for common tools
-            match tool_name {
-                "file_read" => json!({ "path": params_str }),
-                "file_write" => {
-                    let parts: Vec<&str> = params_str.splitn(2, ' ').collect();
-                    if parts.len() == 2 {
-                        json!({ "path": parts[0], "content": parts[1] })
-                    } else {
-                        println!("❌ Usage: /file_write <path> <content>");
-                        return Ok(());
-                    }
-                }
-                "process" => {
-                    let parts: Vec<&str> = params_str.split_whitespace().collect();
-                    if parts.is_empty() {
-                        println!("❌ Usage: /process <command> [args...]");
-                        return Ok(());
-                    }
-                    let command = parts[0];
-                    let args = if parts.len() > 1 {
-                        Some(parts[1..].to_vec())
-                    } else {
-                        None
-                    };
-                    json!({ "command": command, "args": args })
-                }
-                "llm" => json!({ "prompt": params_str }),
-                "token_estimate" => json!({ "text": params_str }),
-                "pmat" => {
-                    let parts: Vec<&str> = params_str.split_whitespace().collect();
-                    if parts.len() < 2 {
-                        println!("❌ Usage: /pmat <command> <path>");
-                        println!("   Commands: complexity, satd, coverage, tdg");
-                        return Ok(());
-                    }
-                    json!({ "command": parts[0], "path": parts[1] })
-                }
-                "bash" => {
-                    json!({ "command": params_str })
-                }
-                "dev_cli" => {
-                    let parts: Vec<&str> = params_str.split_whitespace().collect();
-                    if parts.is_empty() {
-                        println!("❌ Usage: /dev_cli <tool> [args...]");
-                        println!("   Tools: rg, fd, cargo, git, make, etc.");
-                        return Ok(());
-                    }
-                    json!({ 
-                        "tool": parts[0], 
-                        "args": parts[1..].to_vec() 
-                    })
-                }
-                _ => {
-                    println!("❌ Unknown parameter format for tool: {}", tool_name);
-                    return Ok(());
-                }
-            }
-        };
+            println!("❌ Usage: /file_write <path> <content>");
+            None
+        }
+    }
 
-        // Execute tool
+    fn parse_process_params(&self, params_str: &str) -> Option<serde_json::Value> {
+        let parts: Vec<&str> = params_str.split_whitespace().collect();
+        if parts.is_empty() {
+            println!("❌ Usage: /process <command> [args...]");
+            None
+        } else {
+            let command = parts[0];
+            let args = if parts.len() > 1 {
+                Some(parts[1..].to_vec())
+            } else {
+                None
+            };
+            Some(json!({ "command": command, "args": args }))
+        }
+    }
+
+    fn parse_pmat_params(&self, params_str: &str) -> Option<serde_json::Value> {
+        let parts: Vec<&str> = params_str.split_whitespace().collect();
+        if parts.len() < 2 {
+            println!("❌ Usage: /pmat <command> <path>");
+            println!("   Commands: complexity, satd, coverage, tdg");
+            None
+        } else {
+            Some(json!({ "command": parts[0], "path": parts[1] }))
+        }
+    }
+
+    fn parse_dev_cli_params(&self, params_str: &str) -> Option<serde_json::Value> {
+        let parts: Vec<&str> = params_str.split_whitespace().collect();
+        if parts.is_empty() {
+            println!("❌ Usage: /dev_cli <tool> [args...]");
+            println!("   Tools: rg, fd, cargo, git, make, etc.");
+            None
+        } else {
+            Some(json!({
+                "tool": parts[0],
+                "args": parts[1..].to_vec()
+            }))
+        }
+    }
+
+    fn parse_fix_params(&self, params_str: &str) -> Option<serde_json::Value> {
+        let parts: Vec<&str> = params_str.split_whitespace().collect();
+        if parts.len() < 2 {
+            println!("❌ Usage: /fix <type> <path> [--dry-run]");
+            println!("   Types: complexity, format, lint");
+            None
+        } else {
+            let dry_run = parts.get(2).is_some_and(|&s| s == "--dry-run");
+            Some(json!({
+                "fix_type": parts[0],
+                "path": parts[1],
+                "dry_run": dry_run
+            }))
+        }
+    }
+
+    fn parse_tool_params(
+        &self,
+        tool_name: &str,
+        params_str: &str,
+    ) -> Result<Option<serde_json::Value>> {
+        match tool_name {
+            "file_read" => Ok(Some(json!({ "path": params_str }))),
+            "file_write" => Ok(self.parse_file_write_params(params_str)),
+            "process" => Ok(self.parse_process_params(params_str)),
+            "llm" => Ok(Some(json!({ "prompt": params_str }))),
+            "token_estimate" => Ok(Some(json!({ "text": params_str }))),
+            "pmat" => Ok(self.parse_pmat_params(params_str)),
+            "bash" => Ok(Some(json!({ "command": params_str }))),
+            "dev_cli" => Ok(self.parse_dev_cli_params(params_str)),
+            "fix" => Ok(self.parse_fix_params(params_str)),
+            _ => {
+                println!("❌ Unknown parameter format for tool: {}", tool_name);
+                Ok(None)
+            }
+        }
+    }
+
+    async fn execute_tool(&self, tool_name: &str, params: serde_json::Value) -> Result<()> {
         let request = ToolRequest {
             tool: tool_name.to_string(),
             params,
@@ -292,6 +326,32 @@ impl InteractiveChat {
         Ok(())
     }
 
+    async fn execute_tool_command(&self, input: &str) -> Result<()> {
+        let parts: Vec<&str> = input[1..].splitn(2, ' ').collect();
+        if parts.is_empty() {
+            println!("❌ Invalid command");
+            return Ok(());
+        }
+
+        let tool_name = parts[0];
+        let params_str = parts.get(1).unwrap_or(&"{}");
+
+        // Parse parameters
+        let params = if params_str.starts_with('{') {
+            // JSON parameters
+            Some(serde_json::from_str(params_str)?)
+        } else {
+            // Simple parameter handling
+            self.parse_tool_params(tool_name, params_str)?
+        };
+
+        if let Some(params) = params {
+            self.execute_tool(tool_name, params).await
+        } else {
+            Ok(())
+        }
+    }
+
     fn show_help(&self) {
         println!("\n📚 Available Commands:");
         println!("  help, ?        - Show this help message");
@@ -308,6 +368,7 @@ impl InteractiveChat {
         println!("  /pmat <command> <path>          - Run PMAT analysis (complexity, satd, coverage, tdg)");
         println!("  /bash <command>                 - Execute bash commands");
         println!("  /dev_cli <tool> [args...]       - Run dev tools (rg, cargo, git, etc.)");
+        println!("  /fix <type> <path> [--dry-run] - Fix code issues (complexity, format, lint)");
         println!();
         println!("💡 Tips:");
         println!("  - Use Tab for command completion");
