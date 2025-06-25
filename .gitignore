@@ -32,3 +32,6 @@ target/
 # Coverage reports
 coverage/
 tarpaulin-report.*
+
+# pcode files
+.pcode_history
