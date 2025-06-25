@@ -6,6 +6,7 @@ pub mod fix;
 pub mod llm;
 pub mod pmat;
 pub mod process;
+pub mod refactor;
 pub mod stream_exec;
 
 use async_trait::async_trait;

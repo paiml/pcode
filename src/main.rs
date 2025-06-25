@@ -15,6 +15,7 @@ use pcode::{
         llm::{LlmTool, TokenEstimateTool},
         pmat::PmatTool,
         process::ProcessTool,
+        refactor::RefactorTool,
         ToolRegistry,
     },
 };
@@ -267,6 +268,7 @@ async fn initialize_tool_registry() -> Result<ToolRegistry> {
     registry.register(Box::new(DevCliTool::new()));
     registry.register(Box::new(FixTool::new()));
     registry.register(Box::new(CoverageTool::new()));
+    registry.register(Box::new(RefactorTool::new()));
 
     debug!("Registered {} built-in tools", registry.list_tools().len());
 

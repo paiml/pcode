@@ -109,8 +109,8 @@ mod tests {
     #[test]
     fn test_prompts_are_not_empty() {
         // Basic sanity checks
-        assert!(!SYSTEM_PROMPT.is_empty());
-        assert!(!PROJECT_CONTEXT.is_empty());
+        assert!(SYSTEM_PROMPT.len() > 0);
+        assert!(PROJECT_CONTEXT.len() > 0);
         assert!(SYSTEM_PROMPT.len() > 100);
         assert!(PROJECT_CONTEXT.len() > 100);
     }
@@ -127,4 +127,3 @@ mod tests {
         assert!(PROJECT_CONTEXT.contains("- "));
     }
 }
-

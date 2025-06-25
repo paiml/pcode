@@ -121,8 +121,8 @@ impl CoverageTool {
         for (i, line) in lines.iter().enumerate() {
             if line.contains("Coverage Results:") {
                 // Next lines contain file coverage
-                for j in (i + 1)..lines.len() {
-                    let file_line = lines[j];
+                for file_line in lines.iter().skip(i + 1) {
+                    let file_line = *file_line;
                     if file_line.trim().is_empty() {
                         break;
                     }
@@ -251,4 +251,3 @@ Coverage Results:
         assert_eq!(result["files_analyzed"], 5);
     }
 }
-

@@ -151,6 +151,7 @@ pcode> exit                          # Exit pcode
 | `bash` | Execute bash commands | `command` |
 | `dev_cli` | Run dev tools (rg, cargo, git) | `tool`, `args` |
 | `coverage` | Real code coverage with tarpaulin | `path?`, `format?`, `exclude_files?` |
+| `refactor` | AI-powered code refactoring | `path`, `auto_apply?`, `focus?` |
 
 ### Example: Dogfooding
 
@@ -281,6 +282,54 @@ Contributions are welcome! Please ensure:
 - [Code Quality Report](QUALITY.md) - Coverage and complexity metrics
 - [CLAUDE.md](CLAUDE.md) - AI assistant integration guide
 
+## 🤖 AI-Powered Refactoring
+
+pcode now includes **AI-powered automatic refactoring** that combines PMAT analysis with intelligent suggestions!
+
+### How It Works
+
+1. **Analyzes code** with PMAT to identify complexity issues
+2. **Generates suggestions** based on common refactoring patterns
+3. **Enhances with AI** when API key is available (optional)
+4. **Provides actionable fixes** with clear explanations
+
+### Refactor Command Examples
+
+```bash
+# Analyze and suggest refactoring for a file
+pcode> /refactor { "path": "src/complex.rs" }
+
+# Focus on specific issues
+pcode> /refactor { "path": "src/lib.rs", "focus": "complexity" }
+
+# Future: Auto-apply refactoring (not yet implemented)
+pcode> /refactor { "path": "src/main.rs", "auto_apply": true }
+```
+
+### Example Output
+
+```json
+{
+  "status": "success",
+  "suggestions_count": 2,
+  "suggestions": [
+    {
+      "file": "complex.rs",
+      "function": "process_data",
+      "line": 45,
+      "severity": "high",
+      "issue": "Function has complexity of 35, exceeding threshold",
+      "suggestion": "Refactoring suggestions:\n- Extract helper methods for nested conditionals\n- Split this function into multiple smaller functions\n- Consider extracting a class for this functionality"
+    }
+  ]
+}
+```
+
+When AI is enabled (with `AI_STUDIO_API_KEY`), suggestions include:
+- Refactored code examples
+- Step-by-step transformation guides
+- Estimated complexity reduction
+
 ## 🎨 Code Analysis with PMAT
 
 pcode now includes **PMAT (Pragmatic Metrics for Agile Teams)** integration for code quality analysis! This is the first step towards full code execution capabilities.
@@ -360,8 +409,8 @@ We've successfully implemented the first phase of code execution:
 - [x] Implement test dependency graph (TDG) analysis
 - [x] Support for JavaScript/TypeScript analysis
 - [x] Support for Rust code analysis
-- [ ] Integration with AI for automatic refactoring
-- [ ] Real coverage integration with cargo-tarpaulin
+- [x] Integration with AI for automatic refactoring
+- [x] Real coverage integration with cargo-tarpaulin
 
 #### Phase 3: General Code Execution
 - [ ] Implement sandboxed code execution for multiple languages:
