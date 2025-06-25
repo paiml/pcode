@@ -3,13 +3,27 @@
 
 # Variables
 CARGO = cargo
-TARGET = x86_64-unknown-linux-musl
 BINARY_NAME = pcode
-RELEASE_DIR = target/$(TARGET)/release
-DEBUG_DIR = target/$(TARGET)/debug
+# Check if musl target is available, otherwise use default
+MUSL_AVAILABLE := $(shell rustup target list --installed | grep -q x86_64-unknown-linux-musl && echo "yes" || echo "no")
+ifeq ($(MUSL_AVAILABLE),yes)
+    TARGET = x86_64-unknown-linux-musl
+else
+    TARGET = 
+endif
+
+# Set directories based on target
+ifeq ($(TARGET),)
+    RELEASE_DIR = target/release
+    DEBUG_DIR = target/debug
+else
+    RELEASE_DIR = target/$(TARGET)/release
+    DEBUG_DIR = target/$(TARGET)/debug
+endif
 
 # Rust flags for optimization (only for release builds)
-RELEASE_RUSTFLAGS = -C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1
+# Note: Using cargo profile settings instead of RUSTFLAGS to avoid conflicts
+RELEASE_RUSTFLAGS =
 
 # Default target
 .PHONY: all
@@ -18,13 +32,26 @@ all: build
 # Build targets
 .PHONY: build
 build:
+ifeq ($(TARGET),)
+	$(CARGO) build
+else
 	$(CARGO) build --target $(TARGET)
+endif
 
 .PHONY: release
 release:
-	RUSTFLAGS="$(RELEASE_RUSTFLAGS)" $(CARGO) build --release --target $(TARGET)
-	strip $(RELEASE_DIR)/$(BINARY_NAME)
-	upx --best --lzma $(RELEASE_DIR)/$(BINARY_NAME) || true
+ifeq ($(TARGET),)
+	$(CARGO) build --release
+else
+	$(CARGO) build --release --target $(TARGET)
+endif
+	@echo "Stripping binary..."
+	@cp $(RELEASE_DIR)/$(BINARY_NAME) $(RELEASE_DIR)/$(BINARY_NAME).tmp
+	@strip $(RELEASE_DIR)/$(BINARY_NAME).tmp && mv $(RELEASE_DIR)/$(BINARY_NAME).tmp $(RELEASE_DIR)/$(BINARY_NAME) || echo "Strip failed, skipping"
+	@echo "Checking for UPX..."
+	@command -v upx >/dev/null 2>&1 && upx --best --lzma $(RELEASE_DIR)/$(BINARY_NAME) || echo "UPX not found, skipping compression"
+	@echo "Release build complete: $(RELEASE_DIR)/$(BINARY_NAME)"
+	@ls -lh $(RELEASE_DIR)/$(BINARY_NAME)
 
 # Development commands
 .PHONY: run
