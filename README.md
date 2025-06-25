@@ -451,14 +451,33 @@ We've successfully implemented the first phase of code execution:
 - [ ] Implement test runner integration
 - [ ] Add debugging capabilities
 
-#### Phase 3: Enhanced Development Tools
-- [ ] Git integration for version control operations
-- [ ] Code search and refactoring tools
-- [ ] Dependency management (npm, cargo, pip)
-- [ ] Linting and formatting integration
-- [ ] Documentation generation
+#### Phase 4: Workspace Intelligence
+- [ ] Project structure understanding and navigation
+- [ ] Dependency graph analysis
+- [ ] Cross-file refactoring capabilities
+- [ ] Build system integration
 
-#### Phase 4: Platform Integration
+#### Phase 5: Conversation Memory
+- [ ] Session persistence across runs
+- [ ] Context retrieval from previous sessions
+- [ ] Learning from user corrections
+- [ ] Project-specific knowledge base
+
+#### Phase 6: Multi-File Operations
+- [ ] Atomic changes across multiple files
+- [ ] Transaction support with rollback
+- [ ] Bulk search and replace
+- [ ] Coordinated refactoring
+
+#### Phase 7: Development Integration
+- [ ] Debugger integration (breakpoints, stepping)
+- [ ] Language server protocol (LSP) support
+- [ ] Real-time error checking
+- [ ] Git workflow automation
+- [ ] Branch management
+- [ ] Commit message generation
+
+#### Phase 8: Platform Integration
 - [ ] VSCode extension with full MCP support
 - [ ] Neovim plugin
 - [ ] GitHub Actions integration
