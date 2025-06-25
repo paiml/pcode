@@ -1212,6 +1212,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]

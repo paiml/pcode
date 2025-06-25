@@ -37,6 +37,7 @@ nix = { version = "0.29", features = ["process", "fs"] }
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 rustyline = "14.0"
+walkdir = "2.5"
 
 [build-dependencies]
 capnpc = "0.20"
