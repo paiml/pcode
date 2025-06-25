@@ -140,6 +140,23 @@ size: release
 	@ls -lh $(RELEASE_DIR)/$(BINARY_NAME)
 	@size $(RELEASE_DIR)/$(BINARY_NAME) || true
 
+# Chat testing targets
+.PHONY: test-chat
+test-chat:
+	@echo "=== Testing pcode chat functionality ==="
+	@test -f target/release/pcode || (echo "Error: target/release/pcode not found. Run 'make release' first." && exit 1)
+	deno run --allow-run --allow-env scripts/test_interactive.ts
+	deno run --allow-run --allow-env scripts/test_chat_responses.ts
+
+.PHONY: demo-chat
+demo-chat:
+	@echo "=== pcode Interactive Mode Demo ==="
+	deno run scripts/demo_interactive.ts
+
+.PHONY: verify-chat
+verify-chat: test-chat demo-chat
+	@echo "✅ Chat verification complete"
+
 .PHONY: help
 help:
 	@echo "pcode Makefile targets:"
@@ -149,7 +166,7 @@ help:
 	@echo "  make test          - Run all tests"
 	@echo "  make test-coverage - Run tests with coverage report (XML)"
 	@echo "  make coverage      - Run tests with HTML coverage report"
-	@echo "  make lint          - Run all linters (fmt + clippy)"
+	@echo "  make lint          - Run all linters (fmt + clippy + deno)"
 	@echo "  make quality       - Run code quality analysis"
 	@echo "  make bench         - Run benchmarks"
 	@echo "  make doc           - Generate and open documentation"
@@ -160,3 +177,6 @@ help:
 	@echo "  make dev           - Quick development cycle (format, test, lint)"
 	@echo "  make ci            - Run full CI pipeline"
 	@echo "  make size          - Analyze binary size"
+	@echo "  make test-chat     - Test interactive chat functionality"
+	@echo "  make demo-chat     - Run interactive mode demo"
+	@echo "  make verify-chat   - Full chat verification (build + test + demo)"

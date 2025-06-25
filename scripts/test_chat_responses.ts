@@ -45,24 +45,25 @@ async function testChatResponse(query: string, withApiKey: boolean): Promise<str
 
 function extractResponse(output: string, query: string): string {
   const lines = output.split("\n");
-  const queryIndex = lines.findIndex((line) => line.includes(query));
-
-  if (queryIndex === -1) return "Query not found in output";
-
+  
+  // Find where the welcome message ends
+  const welcomeEnd = lines.findIndex(line => line.includes("Type 'help' for available commands"));
+  if (welcomeEnd === -1) return "Welcome message not found";
+  
+  // Extract all content after the welcome message and before "Goodbye"
   const responseLines: string[] = [];
-  let capturing = false;
-
-  for (let i = queryIndex + 1; i < lines.length && responseLines.length < 15; i++) {
+  let foundContent = false;
+  
+  for (let i = welcomeEnd + 2; i < lines.length; i++) {
     const line = lines[i];
-
-    if (line.includes("pcode>") || line.includes("Goodbye")) break;
-
-    if (line.trim() || capturing) {
+    if (line.includes("Goodbye")) break;
+    if (line.trim()) {
       responseLines.push(line);
-      capturing = true;
+      foundContent = true;
     }
   }
-
+  
+  if (!foundContent) return "No response found";
   return responseLines.join("\n").trimEnd();
 }
 

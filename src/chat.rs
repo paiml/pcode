@@ -217,7 +217,20 @@ impl InteractiveChat {
                         return Ok(());
                     }
                 }
-                "process" => json!({ "command": params_str }),
+                "process" => {
+                    let parts: Vec<&str> = params_str.split_whitespace().collect();
+                    if parts.is_empty() {
+                        println!("❌ Usage: /process <command> [args...]");
+                        return Ok(());
+                    }
+                    let command = parts[0];
+                    let args = if parts.len() > 1 {
+                        Some(parts[1..].to_vec())
+                    } else {
+                        None
+                    };
+                    json!({ "command": command, "args": args })
+                }
                 "llm" => json!({ "prompt": params_str }),
                 "token_estimate" => json!({ "text": params_str }),
                 _ => {
