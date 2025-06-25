@@ -80,26 +80,54 @@ make release
 
 ## 📖 Usage
 
+### Interactive Mode
+
+pcode supports an interactive chat interface similar to Claude:
+
+```bash
+# Start interactive mode (default when no command given)
+pcode
+
+# Explicitly start interactive mode
+pcode --interactive
+
+# Interactive mode with custom working directory
+pcode -i --workdir /path/to/project
+```
+
 ### Basic Commands
 
 ```bash
 # Show help
 pcode --help
 
-# Run with default settings (current directory)
-pcode
-
 # Run with debug logging
 pcode --debug
 
-# Specify working directory
-pcode --workdir /path/to/project
+# Execute a single command (coming soon)
+pcode --command "read src/main.rs"
 
 # Set memory limit
 pcode --max-memory 1024
 
 # Disable sandbox (not recommended)
 pcode --no-sandbox
+```
+
+### Interactive Mode Commands
+
+Once in interactive mode:
+
+```
+pcode> help                          # Show available commands
+pcode> tools                         # List available tools
+pcode> /file_read src/main.rs        # Read a file
+pcode> /file_write test.txt Hello    # Write to a file
+pcode> /process ls -la               # Execute a command
+pcode> /llm Explain this code        # Query the LLM (requires API key)
+pcode> /token_estimate text          # Estimate token count
+pcode> clear                         # Clear screen
+pcode> exit                          # Exit pcode
 ```
 
 ### Available Tools

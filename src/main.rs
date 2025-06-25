@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use pcode::{
+    chat::InteractiveChat,
     mcp::McpProtocol,
     runtime::Runtime,
     security::{SecurityContext, SecurityPolicy},
@@ -30,6 +31,12 @@ struct Args {
 
     #[arg(long, help = "Maximum memory usage in MB", default_value = "512")]
     max_memory: usize,
+
+    #[arg(short, long, help = "Run in interactive mode")]
+    interactive: bool,
+
+    #[arg(short, long, help = "Execute a command and exit")]
+    command: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -97,12 +104,16 @@ async fn async_main(args: Args) -> Result<()> {
 
     info!("pcode ready");
 
-    // Main event loop would go here
-    // For now, just demonstrate functionality
-
-    let tools = registry.list_tools();
-    for (name, desc) in tools {
-        info!("Available tool: {} - {}", name, desc);
+    // Check if we're in interactive mode or have a command
+    if args.interactive || args.command.is_none() {
+        // Run interactive chat
+        let mut chat = InteractiveChat::new(registry);
+        chat.run().await?;
+    } else if let Some(command) = args.command {
+        // Execute single command
+        info!("Executing command: {}", command);
+        // TODO: Parse and execute command
+        println!("Single command execution not yet implemented. Use interactive mode.");
     }
 
     Ok(())
