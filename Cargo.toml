@@ -1,0 +1,55 @@
+[package]
+name = "pcode"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pragmatic AI Labs"]
+license = "MIT"
+description = "Production-grade AI code agent with extreme performance and security"
+repository = "https://github.com/pragmatic-ai-labs/pcode"
+readme = "README.md"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "=1.0.120"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
+thiserror = "1.0"
+capnp = "0.20"
+phf = { version = "0.11", features = ["macros"] }
+phf_codegen = "0.11"
+bytes = "1.7"
+memmap2 = "0.9"
+nix = { version = "0.29", features = ["process", "fs"] }
+async-trait = "0.1"
+
+[build-dependencies]
+capnpc = "0.20"
+phf_codegen = "0.11"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+tokio-test = "0.4"
+tempfile = "3.14"
+
+[[bench]]
+name = "token_estimation"
+harness = false
+
+[[bench]]
+name = "runtime_performance"
+harness = false
