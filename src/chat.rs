@@ -242,6 +242,21 @@ impl InteractiveChat {
                     }
                     json!({ "command": parts[0], "path": parts[1] })
                 }
+                "bash" => {
+                    json!({ "command": params_str })
+                }
+                "dev_cli" => {
+                    let parts: Vec<&str> = params_str.split_whitespace().collect();
+                    if parts.is_empty() {
+                        println!("❌ Usage: /dev_cli <tool> [args...]");
+                        println!("   Tools: rg, fd, cargo, git, make, etc.");
+                        return Ok(());
+                    }
+                    json!({ 
+                        "tool": parts[0], 
+                        "args": parts[1..].to_vec() 
+                    })
+                }
                 _ => {
                     println!("❌ Unknown parameter format for tool: {}", tool_name);
                     return Ok(());
@@ -291,6 +306,8 @@ impl InteractiveChat {
         println!("  /llm <prompt>                   - Query the LLM (requires API key)");
         println!("  /token_estimate <text>          - Estimate token count");
         println!("  /pmat <command> <path>          - Run PMAT analysis (complexity, satd)");
+        println!("  /bash <command>                 - Execute bash commands");
+        println!("  /dev_cli <tool> [args...]       - Run dev tools (rg, cargo, git, etc.)");
         println!();
         println!("💡 Tips:");
         println!("  - Use Tab for command completion");

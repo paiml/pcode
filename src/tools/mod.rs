@@ -1,3 +1,5 @@
+pub mod bash;
+pub mod dev_cli;
 pub mod file;
 pub mod llm;
 pub mod pmat;

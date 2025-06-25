@@ -1,12 +1,10 @@
 use super::{Tool, ToolError};
-use crate::security::SecurityContext;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
@@ -144,6 +142,11 @@ impl PmatTool {
     }
 
     async fn analyze_complexity(&self, path: &str) -> Result<Vec<ComplexityResult>, ToolError> {
+        // Check if we're analyzing Rust code
+        if path.ends_with(".rs") || PathBuf::from(path).is_dir() {
+            return self.analyze_rust_complexity(path).await;
+        }
+        
         let script = r#"
 import ast
 import os
@@ -248,6 +251,126 @@ if __name__ == "__main__":
         
         serde_json::from_str(&output)
             .map_err(|e| ToolError::Execution(format!("Failed to parse results: {}", e)))
+    }
+
+    async fn analyze_rust_complexity(&self, path: &str) -> Result<Vec<ComplexityResult>, ToolError> {
+        // For Rust, we'll use a simple heuristic-based approach
+        use tokio::fs;
+        
+        let mut results = Vec::new();
+        
+        // Check if path is a file or directory
+        let metadata = fs::metadata(path).await
+            .map_err(|e| ToolError::Execution(format!("Cannot access path: {}", e)))?;
+            
+        if metadata.is_file() {
+            let content = fs::read_to_string(path).await
+                .map_err(|e| ToolError::Execution(format!("Cannot read file: {}", e)))?;
+            results.extend(self.analyze_rust_file(path, &content));
+        } else {
+            // Analyze all .rs files in directory
+            let mut dir = fs::read_dir(path).await
+                .map_err(|e| ToolError::Execution(format!("Cannot read directory: {}", e)))?;
+                
+            while let Some(entry) = dir.next_entry().await
+                .map_err(|e| ToolError::Execution(format!("Error reading entry: {}", e)))? {
+                
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(content) = fs::read_to_string(&path).await {
+                        results.extend(self.analyze_rust_file(&path.to_string_lossy(), &content));
+                    }
+                }
+            }
+        }
+        
+        Ok(results)
+    }
+
+    fn analyze_rust_file(&self, file_path: &str, content: &str) -> Vec<ComplexityResult> {
+        let mut results = Vec::new();
+        let mut in_function = false;
+        let mut current_fn_name = String::new();
+        let mut current_fn_line = 0u32;
+        let mut complexity = 0u32;
+        let mut brace_depth = 0i32;
+        let mut fn_brace_depth = 0i32;
+        
+        for (line_num, line) in content.lines().enumerate() {
+            let line_num = line_num as u32 + 1;
+            let trimmed = line.trim();
+            
+            // Skip comments
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            
+            // Count braces
+            brace_depth += line.chars().filter(|&c| c == '{').count() as i32;
+            brace_depth -= line.chars().filter(|&c| c == '}').count() as i32;
+            
+            // Detect function definitions
+            if !in_function && (trimmed.starts_with("fn ") || 
+                trimmed.starts_with("pub fn ") ||
+                trimmed.starts_with("async fn ") ||
+                trimmed.starts_with("pub async fn ") ||
+                trimmed.contains(" fn ")) {
+                
+                if let Some(start) = trimmed.find("fn ") {
+                    let after_fn = &trimmed[start + 3..];
+                    if let Some(paren) = after_fn.find('(') {
+                        current_fn_name = after_fn[..paren].trim().to_string();
+                        current_fn_line = line_num;
+                        complexity = 1; // Base complexity
+                        in_function = true;
+                        fn_brace_depth = brace_depth;
+                    }
+                }
+            }
+            
+            // Analyze complexity inside functions
+            if in_function {
+                // Control flow structures
+                if trimmed.starts_with("if ") || trimmed.contains(" if ") {
+                    complexity += 1;
+                }
+                if trimmed.starts_with("match ") {
+                    complexity += 1;
+                }
+                if trimmed.starts_with("while ") || trimmed.starts_with("loop") {
+                    complexity += 1;
+                }
+                if trimmed.starts_with("for ") {
+                    complexity += 1;
+                }
+                if trimmed.contains("=>") && !trimmed.starts_with("//") {
+                    complexity += 1;
+                }
+                
+                // Check if function ended
+                if brace_depth < fn_brace_depth {
+                    results.push(ComplexityResult {
+                        file: file_path.to_string(),
+                        function: current_fn_name.clone(),
+                        complexity,
+                        line: current_fn_line,
+                    });
+                    in_function = false;
+                }
+            }
+        }
+        
+        // Handle case where function extends to end of file
+        if in_function {
+            results.push(ComplexityResult {
+                file: file_path.to_string(),
+                function: current_fn_name,
+                complexity,
+                line: current_fn_line,
+            });
+        }
+        
+        results
     }
 
     async fn detect_satd(&self, path: &str) -> Result<Vec<SatdResult>, ToolError> {
