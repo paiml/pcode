@@ -18,7 +18,7 @@ use pcode::{
     },
 };
 use std::path::PathBuf;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -220,18 +220,8 @@ async fn async_main(args: Args) -> Result<()> {
         info!("Running without security sandbox");
     }
 
-    // Initialize tool registry
-    let mut registry = ToolRegistry::new();
-    registry.register(Box::new(FileReadTool));
-    registry.register(Box::new(FileWriteTool));
-    registry.register(Box::new(ProcessTool));
-    registry.register(Box::new(LlmTool::new()));
-    registry.register(Box::new(TokenEstimateTool));
-    registry.register(Box::new(PmatTool::new()));
-    registry.register(Box::new(BashTool::new()));
-    registry.register(Box::new(DevCliTool::new()));
-    registry.register(Box::new(FixTool::new()));
-
+    // Initialize tool registry with discovery
+    let registry = initialize_tool_registry().await?;
     info!("Registered {} tools", registry.list_tools().len());
 
     // Initialize MCP protocol

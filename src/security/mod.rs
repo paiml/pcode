@@ -8,7 +8,9 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+pub mod manifest;
 pub mod sandbox;
+pub mod verified_sandbox;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecurityError {

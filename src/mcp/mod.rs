@@ -1,6 +1,7 @@
 pub mod discovery;
 pub mod protocol;
 pub mod protocol_v2;
+pub mod secure_discovery;
 pub mod streaming;
 pub mod transport;
 
