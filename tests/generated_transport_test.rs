@@ -1,5 +1,5 @@
 // Generated tests for mcp/transport.rs
-use pcode::mcp::protocol::{ProtocolHandler, Message};
+use pcode::mcp::protocol::{Message, ProtocolHandler};
 
 #[tokio::test]
 async fn test_stdio_transport_send_success() {
@@ -12,14 +12,14 @@ async fn test_stdio_transport_send_success() {
 #[tokio::test]
 async fn test_protocol_encode_decode_roundtrip() {
     let handler = ProtocolHandler::new();
-    let original = Message { 
-        id: 12345, 
-        payload: vec![0xFF, 0x00, 0xAB, 0xCD] 
+    let original = Message {
+        id: 12345,
+        payload: vec![0xFF, 0x00, 0xAB, 0xCD],
     };
-    
+
     let encoded = handler.encode_message(&original).unwrap();
     let decoded = handler.decode_message(&encoded).unwrap();
-    
+
     assert_eq!(original.id, decoded.id);
     assert_eq!(original.payload, decoded.payload);
 }

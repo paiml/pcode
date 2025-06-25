@@ -1,18 +1,20 @@
-use pcode::{
-    tools::{Tool, file::{FileReadTool, FileWriteTool}, llm::LlmTool},
+use pcode::tools::{
+    file::{FileReadTool, FileWriteTool},
+    llm::LlmTool,
+    Tool,
 };
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("🧪 Using pcode to generate tests for uncovered code!");
-    
+
     // Read the transport module which has low coverage
     let read_tool = FileReadTool;
     let params = json!({
         "path": "src/mcp/transport.rs"
     });
-    
+
     let content = match read_tool.execute(params).await {
         Ok(result) => result["content"].as_str().unwrap_or("").to_string(),
         Err(e) => {
@@ -20,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     };
-    
+
     // Use LLM tool to analyze and suggest tests
     let llm_tool = LlmTool::new();
     let params = json!({
@@ -30,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         "max_tokens": 500
     });
-    
+
     match llm_tool.execute(params).await {
         Ok(result) => {
             println!("\n📝 LLM Analysis:");
@@ -40,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Err(e) => println!("Error with LLM: {}", e),
     }
-    
+
     // Generate a mock test file
     let test_content = r#"// Generated tests for mcp/transport.rs
 #[cfg(test)]
@@ -72,23 +74,23 @@ mod generated_tests {
     }
 }
 "#;
-    
+
     // Write the generated test file
     let write_tool = FileWriteTool;
     let params = json!({
         "path": "tests/generated_transport_test.rs",
         "content": test_content
     });
-    
+
     match write_tool.execute(params).await {
         Ok(_) => println!("\n✅ Generated test file: tests/generated_transport_test.rs"),
         Err(e) => println!("Error writing test file: {}", e),
     }
-    
+
     println!("\n🎯 Next steps:");
     println!("1. Review and enhance the generated tests");
     println!("2. Add mock implementations for async I/O");
     println!("3. Run 'make coverage' to check improvement");
-    
+
     Ok(())
 }

@@ -74,7 +74,7 @@ mod tests {
         let result = runtime.block_on(handle);
         assert_eq!(result.unwrap(), 42);
     }
-    
+
     #[test]
     fn test_runtime_spawn_blocking() {
         let runtime = Runtime::new().unwrap();
@@ -82,12 +82,12 @@ mod tests {
         let result = runtime.block_on(handle);
         assert_eq!(result.unwrap(), 84);
     }
-    
+
     #[test]
     fn test_runtime_error_display() {
         let err = RuntimeError::Creation("test error".to_string());
         assert_eq!(err.to_string(), "Failed to create runtime: test error");
-        
+
         let err = RuntimeError::Execution("exec error".to_string());
         assert_eq!(err.to_string(), "Task execution error: exec error");
     }

@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    context::{PROJECT_CONTEXT, SYSTEM_PROMPT},
     tools::{ToolRegistry, ToolRequest},
 };
 use anyhow::Result;
@@ -26,11 +27,14 @@ impl InteractiveChat {
     pub async fn run(&mut self) -> Result<()> {
         // Initialize readline editor
         let mut rl = DefaultEditor::new()?;
-        
+
         // Load history if exists
         let _ = rl.load_history(&self.history_file);
 
-        println!("🤖 pcode v{} - AI Code Assistant", env!("CARGO_PKG_VERSION"));
+        println!(
+            "🤖 pcode v{} - AI Code Assistant",
+            env!("CARGO_PKG_VERSION")
+        );
         println!("Type 'help' for available commands, 'exit' to quit");
         println!();
 
@@ -39,10 +43,10 @@ impl InteractiveChat {
             match readline {
                 Ok(line) => {
                     let line = line.trim();
-                    
+
                     // Add to history
                     let _ = rl.add_history_entry(line);
-                    
+
                     // Handle special commands
                     match line {
                         "" => continue,
@@ -97,15 +101,78 @@ impl InteractiveChat {
             return self.execute_tool_command(input).await;
         }
 
-        // For now, echo the input as we don't have LLM integration yet
-        println!("🤔 Received: {}", input);
-        
-        // If we have an API key, we could use the LLM tool
+        // Process natural language input with LLM if available
         if self.config.has_api_key() {
-            println!("💡 I would process this with the LLM, but full chat integration is not yet implemented.");
-            println!("   You can use /llm <prompt> to test the LLM tool directly.");
+            // Build a contextual prompt
+            let full_prompt = format!(
+                "{}\n\nContext:\n{}\n\nUser: {}\n\nAssistant:",
+                SYSTEM_PROMPT, PROJECT_CONTEXT, input
+            );
+
+            // Use the LLM tool to process the input
+            let request = ToolRequest {
+                tool: "llm".to_string(),
+                params: json!({
+                    "prompt": full_prompt,
+                    "max_tokens": 500,
+                    "temperature": 0.7
+                }),
+            };
+
+            let response = self.registry.execute(request).await;
+
+            if response.success {
+                if let Some(result) = response.result {
+                    if let Some(text) = result.get("response").and_then(|v| v.as_str()) {
+                        println!("{}", text);
+                    } else {
+                        println!("🤖 {}", serde_json::to_string_pretty(&result)?);
+                    }
+                } else {
+                    println!("💭 No response from LLM");
+                }
+            } else {
+                println!(
+                    "❌ Error: {}",
+                    response
+                        .error
+                        .unwrap_or_else(|| "Failed to process with LLM".to_string())
+                );
+            }
         } else {
-            println!("ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable LLM features.");
+            // Provide helpful responses without LLM
+            self.handle_offline_query(input)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_offline_query(&self, input: &str) -> Result<()> {
+        let input_lower = input.to_lowercase();
+
+        // Provide intelligent responses for common queries without LLM
+        if input_lower.contains("about")
+            && (input_lower.contains("project") || input_lower.contains("pcode"))
+        {
+            println!("🤖 pcode is a production-grade AI code agent with extreme performance and security requirements.\n");
+            println!("Key features:");
+            println!("• Interactive chat interface for AI-assisted coding");
+            println!(
+                "• Security sandboxing (Landlock on Linux, platform-specific on macOS/Windows)"
+            );
+            println!("• Tool system for file operations, process execution, and more");
+            println!("• Token estimation with perfect hash tables");
+            println!("• Extreme performance: <200ms latency, <12MB binary size");
+            println!("\nSet AI_STUDIO_API_KEY environment variable to enable AI features.");
+        } else if input_lower.contains("help") {
+            self.show_help();
+        } else if input_lower.contains("tool") {
+            self.list_tools();
+        } else {
+            println!(
+                "ℹ️  No AI Studio API key found. Set AI_STUDIO_API_KEY to enable AI responses."
+            );
+            println!("   Type 'help' for available commands or 'tools' to see available tools.");
         }
 
         Ok(())
@@ -156,7 +223,7 @@ impl InteractiveChat {
 
         println!("🔧 Executing tool: {}", tool_name);
         let response = self.registry.execute(request).await;
-        
+
         if response.success {
             if let Some(result) = response.result {
                 println!("✅ Success:");
@@ -165,7 +232,12 @@ impl InteractiveChat {
                 println!("✅ Success (no output)");
             }
         } else {
-            println!("❌ Error: {}", response.error.unwrap_or_else(|| "Unknown error".to_string()));
+            println!(
+                "❌ Error: {}",
+                response
+                    .error
+                    .unwrap_or_else(|| "Unknown error".to_string())
+            );
         }
 
         Ok(())

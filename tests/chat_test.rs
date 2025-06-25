@@ -1,8 +1,8 @@
+use async_trait::async_trait;
 use pcode::{
     chat::InteractiveChat,
     tools::{Tool, ToolRegistry},
 };
-use async_trait::async_trait;
 use serde_json::{json, Value};
 
 // Mock tool for testing
@@ -27,14 +27,14 @@ impl Tool for MockTool {
 fn test_interactive_chat_creation() {
     let mut registry = ToolRegistry::new();
     registry.register(Box::new(MockTool));
-    
-    let chat = InteractiveChat::new(registry);
+
+    let _chat = InteractiveChat::new(registry);
     // Just verify it creates without panicking
 }
 
 #[test]
 fn test_chat_with_empty_registry() {
     let registry = ToolRegistry::new();
-    let chat = InteractiveChat::new(registry);
+    let _chat = InteractiveChat::new(registry);
     // Should work with empty registry
 }

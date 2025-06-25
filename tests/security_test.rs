@@ -1,7 +1,7 @@
-use pcode::security::{SecurityContext, SecurityPolicy};
+use pcode::security::SecurityPolicy;
 use std::path::PathBuf;
 
-#[test] 
+#[test]
 fn test_security_policy_custom() {
     let policy = SecurityPolicy {
         allowed_paths: vec![PathBuf::from("/custom/path")],
@@ -9,7 +9,7 @@ fn test_security_policy_custom() {
         allow_process_spawn: false,
         max_memory_mb: 1024,
     };
-    
+
     assert_eq!(policy.allowed_paths.len(), 1);
     assert!(policy.allow_network);
     assert!(!policy.allow_process_spawn);
@@ -26,14 +26,14 @@ fn test_security_context_path_check_nested() {
 #[test]
 fn test_macos_sandbox() {
     use pcode::security::macos::apply_sandbox_profile;
-    
+
     let policy = SecurityPolicy {
         allowed_paths: vec![PathBuf::from("/tmp/test")],
         allow_network: false,
         allow_process_spawn: true,
         max_memory_mb: 512,
     };
-    
+
     // Should not fail
     assert!(apply_sandbox_profile(&policy).is_ok());
 }
@@ -42,14 +42,14 @@ fn test_macos_sandbox() {
 #[test]
 fn test_windows_sandbox() {
     use pcode::security::windows::apply_app_container;
-    
+
     let policy = SecurityPolicy {
         allowed_paths: vec![PathBuf::from("C:\\temp")],
         allow_network: true,
         allow_process_spawn: false,
         max_memory_mb: 512,
     };
-    
+
     // Should not fail
     assert!(apply_app_container(&policy).is_ok());
 }

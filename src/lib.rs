@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod config;
+pub mod context;
 pub mod mcp;
 pub mod runtime;
 pub mod security;

@@ -11,7 +11,7 @@ impl Config {
             ai_studio_api_key: env::var("AI_STUDIO_API_KEY").ok(),
         }
     }
-    
+
     pub fn has_api_key(&self) -> bool {
         self.ai_studio_api_key.is_some()
     }
@@ -26,7 +26,7 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_config_from_env() {
         let config = Config::from_env();
