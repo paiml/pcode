@@ -5,6 +5,7 @@ pub mod fix;
 pub mod llm;
 pub mod pmat;
 pub mod process;
+pub mod stream_exec;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
